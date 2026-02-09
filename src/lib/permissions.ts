@@ -35,8 +35,14 @@ export function canAccessRoute(user: User | null, route: string): boolean {
     '/doctors': ['view:doctors'],
     '/calendar': ['view:calendar'],
     '/settings': ['view:settings'],
+    '/conversations': ['view:conversations'],
     '/admin/users': ['view:users'],
-    '/admin/clinics': ['view:clinics']
+    '/admin/clinics': ['view:clinics'],
+    '/clinic': ['view:dashboard'],
+    '/clinic/appointments': ['view:appointments'],
+    '/clinic/patients': ['view:patients'],
+    '/clinic/conversations': ['view:conversations'],
+    '/clinic/reports': ['view:reports']
   }
 
   const requiredPermissions = routePermissions[route]
@@ -49,12 +55,14 @@ export function canAccessRoute(user: User | null, route: string): boolean {
 export const ROLE_NAMES: Record<UserRole, string> = {
   admin: 'Администратор',
   doctor: 'Лекар',
-  receptionist: 'Рецепция'
+  receptionist: 'Рецепция',
+  clinic: 'Клиника'
 }
 
 // Role colors for UI
 export const ROLE_COLORS: Record<UserRole, string> = {
   admin: 'bg-purple-100 text-purple-800',
   doctor: 'bg-blue-100 text-blue-800',
-  receptionist: 'bg-green-100 text-green-800'
+  receptionist: 'bg-green-100 text-green-800',
+  clinic: 'bg-teal-100 text-teal-800'
 }

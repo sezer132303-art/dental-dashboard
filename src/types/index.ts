@@ -1,4 +1,4 @@
-export type UserRole = 'admin' | 'doctor' | 'receptionist'
+export type UserRole = 'admin' | 'doctor' | 'receptionist' | 'clinic'
 
 export interface User {
   id: string
@@ -39,6 +39,7 @@ export const ROLE_PERMISSIONS = {
     'edit:clinics',
     'delete:clinics',
     'view:reports',
+    'view:conversations',
     'export:data'
   ],
   doctor: [
@@ -59,6 +60,14 @@ export const ROLE_PERMISSIONS = {
     'edit:patients',
     'view:doctors',
     'view:calendar'
+  ],
+  clinic: [
+    'view:dashboard',
+    'view:appointments',
+    'view:patients',
+    'view:conversations',
+    'view:calendar',
+    'view:reports'
   ]
 } as const
 

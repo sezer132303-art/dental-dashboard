@@ -85,6 +85,9 @@ export async function POST(request: Request) {
       path: '/'
     })
 
+    // Determine redirect URL based on role
+    const redirectUrl = user.role === 'clinic' ? '/clinic' : '/'
+
     return NextResponse.json({
       success: true,
       user: {
@@ -92,7 +95,8 @@ export async function POST(request: Request) {
         name: user.name,
         phone: user.phone,
         role: user.role
-      }
+      },
+      redirectUrl
     })
   } catch (error) {
     console.error('Login API error:', error)

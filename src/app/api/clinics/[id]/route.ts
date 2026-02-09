@@ -39,13 +39,24 @@ export async function PATCH(
   try {
     const { id } = await params
     const body = await request.json()
-    const { name, whatsapp_instance } = body
+
+    // Build update object with only provided fields
+    const updateData: Record<string, any> = {}
+
+    if (body.name !== undefined) updateData.name = body.name
+    if (body.address !== undefined) updateData.address = body.address
+    if (body.phone !== undefined) updateData.phone = body.phone
+    if (body.whatsapp_instance !== undefined) updateData.whatsapp_instance = body.whatsapp_instance
+    if (body.whatsapp_api_key !== undefined) updateData.whatsapp_api_key = body.whatsapp_api_key
+    if (body.evolution_api_url !== undefined) updateData.evolution_api_url = body.evolution_api_url
+    if (body.google_calendar_id !== undefined) updateData.google_calendar_id = body.google_calendar_id
+    if (body.google_service_account !== undefined) updateData.google_service_account = body.google_service_account
 
     const supabase = createServerSupabaseClient()
 
     const { data: clinic, error } = await supabase
       .from('clinics')
-      .update({ name, whatsapp_instance })
+      .update(updateData)
       .eq('id', id)
       .select()
       .single()

@@ -13,7 +13,9 @@ import {
   Building2,
   Menu,
   X,
-  Stethoscope
+  Stethoscope,
+  MessageCircle,
+  UserPlus
 } from 'lucide-react'
 import { useState } from 'react'
 
@@ -22,11 +24,13 @@ const navigation = [
   { name: 'Лекари', href: '/doctors', icon: Stethoscope },
   { name: 'Часове', href: '/appointments', icon: Calendar },
   { name: 'Пациенти', href: '/patients', icon: Users },
+  { name: 'WhatsApp', href: '/conversations', icon: MessageCircle },
   { name: 'Календар', href: '/calendar', icon: CalendarDays },
   { name: 'Настройки', href: '/settings', icon: Settings },
 ]
 
 const adminNavigation = [
+  { name: 'Нова клиника', href: '/admin/onboarding', icon: UserPlus },
   { name: 'Клиники', href: '/admin/clinics', icon: Building2 },
   { name: 'Потребители', href: '/admin/users', icon: Users },
 ]

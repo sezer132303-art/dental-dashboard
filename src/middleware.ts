@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 
 // Routes that don't require authentication
-const publicRoutes = ['/login', '/auth/verify']
+const publicRoutes = ['/login', '/auth/verify', '/auth/forgot-password', '/auth/reset-password']
 
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl
@@ -10,8 +10,16 @@ export function middleware(request: NextRequest) {
 
   // Allow public routes
   if (publicRoutes.some(route => pathname.startsWith(route))) {
-    // If user is already authenticated, redirect to dashboard
+    // If user is already authenticated, redirect to appropriate dashboard
     if (session) {
+      try {
+        const sessionData = JSON.parse(session.value)
+        if (sessionData.role === 'clinic') {
+          return NextResponse.redirect(new URL('/clinic', request.url))
+        }
+      } catch {
+        // Invalid session, continue to login
+      }
       return NextResponse.redirect(new URL('/', request.url))
     }
     return NextResponse.next()
@@ -24,8 +32,9 @@ export function middleware(request: NextRequest) {
   }
 
   // Parse session and check expiry
+  let sessionData
   try {
-    const sessionData = JSON.parse(session.value)
+    sessionData = JSON.parse(session.value)
     if (new Date(sessionData.expires) < new Date()) {
       // Session expired, redirect to login
       const response = NextResponse.redirect(new URL('/login', request.url))
@@ -39,15 +48,23 @@ export function middleware(request: NextRequest) {
     return response
   }
 
+  // Clinic users can only access /clinic routes
+  if (sessionData.role === 'clinic') {
+    if (!pathname.startsWith('/clinic')) {
+      return NextResponse.redirect(new URL('/clinic', request.url))
+    }
+    return NextResponse.next()
+  }
+
+  // Non-clinic users cannot access /clinic routes
+  if (pathname.startsWith('/clinic')) {
+    return NextResponse.redirect(new URL('/', request.url))
+  }
+
   // Check admin routes
   if (pathname.startsWith('/admin')) {
-    try {
-      const sessionData = JSON.parse(session.value)
-      if (sessionData.role !== 'admin') {
-        return NextResponse.redirect(new URL('/', request.url))
-      }
-    } catch {
-      return NextResponse.redirect(new URL('/login', request.url))
+    if (sessionData.role !== 'admin') {
+      return NextResponse.redirect(new URL('/', request.url))
     }
   }
 

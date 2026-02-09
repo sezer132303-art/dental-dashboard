@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
+import Link from 'next/link'
 
 export default function LoginPage() {
   const [phone, setPhone] = useState('')
@@ -29,8 +30,8 @@ export default function LoginPage() {
         return
       }
 
-      // Redirect to dashboard
-      router.push('/')
+      // Redirect based on user role
+      router.push(data.redirectUrl || '/')
     } catch (err) {
       setError('Неочаквана грешка. Моля, опитайте отново.')
     } finally {
@@ -108,9 +109,9 @@ export default function LoginPage() {
         </form>
 
         <div className="mt-6 text-center">
-          <a href="/auth/forgot-password" className="text-sm text-blue-600 hover:text-blue-800">
+          <Link href="/auth/forgot-password" className="text-sm text-blue-600 hover:text-blue-800">
             Забравена парола?
-          </a>
+          </Link>
         </div>
       </div>
     </div>

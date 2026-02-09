@@ -1,0 +1,596 @@
+{
+  "name": "WhatsApp Booking",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "whatsapp-booking",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-trigger",
+      "name": "WhatsApp Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        260,
+        300
+      ],
+      "webhookId": "whatsapp-booking-webhook"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "leftValue": "",
+            "caseSensitive": true,
+            "typeValidation": "strict"
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "leftValue": "={{ $json.body?.data?.messageType }}",
+              "rightValue": "conversation",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ]
+        }
+      },
+      "id": "if-text-message",
+      "name": "Is Text Message?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        480,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Extract message data from Evolution API webhook\nconst body = $input.first().json.body;\nconst data = body?.data || {};\nconst key = data?.key || {};\n\n// Get phone number (remove @s.whatsapp.net suffix)\nconst remoteJid = key.remoteJid || '';\nconst phone = remoteJid.replace('@s.whatsapp.net', '');\n\n// Get message content\nconst message = data?.message?.conversation || \n                data?.message?.extendedTextMessage?.text || \n                '';\n\n// Get message metadata\nconst messageId = key.id || '';\nconst timestamp = data?.messageTimestamp || Math.floor(Date.now() / 1000);\nconst pushName = data?.pushName || '';\n\nreturn [{\n  json: {\n    phone,\n    message,\n    messageId,\n    timestamp,\n    pushName,\n    rawPayload: body\n  }\n}];"
+      },
+      "id": "extract-message",
+      "name": "Extract Message Data",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        700,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://localhost:3000/api/n8n/log-conversation",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-API-Key",
+              "value": "dental-n8n-whatsapp-booking-2026"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"patientPhone\": \"{{ $json.phone }}\",\n  \"direction\": \"inbound\",\n  \"content\": \"{{ $json.message }}\",\n  \"messageType\": \"text\",\n  \"messageId\": \"{{ $json.messageId }}\",\n  \"rawPayload\": {{ JSON.stringify($json.rawPayload) }}\n}",
+        "options": {}
+      },
+      "id": "log-inbound",
+      "name": "Log Inbound Message",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        920,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.openai.com/v1/chat/completions",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer YOUR_OPENAI_API_KEY_HERE"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"model\": \"gpt-4o-mini\",\n  \"messages\": [\n    {\n      \"role\": \"system\",\n      \"content\": \"Ти си асистент на дентална клиника. Анализирай съобщението на пациента и извлечи информация.\\n\\nДнешната дата е {{ $today.format('yyyy-MM-dd') }}.\\n\\nВърни САМО валиден JSON с тази структура:\\n{\\n  \\\"intent\\\": \\\"booking_request\\\" | \\\"availability_inquiry\\\" | \\\"confirmation\\\" | \\\"cancellation\\\" | \\\"general_inquiry\\\",\\n  \\\"preferredDate\\\": \\\"YYYY-MM-DD или null\\\",\\n  \\\"preferredTime\\\": \\\"HH:MM или null\\\",\\n  \\\"procedureType\\\": \\\"тип процедура или null\\\",\\n  \\\"patientName\\\": \\\"име ако е споменато или null\\\"\\n}\\n\\nПримери за дати:\\n- \\\"утре\\\" = {{ $today.plus({days: 1}).format('yyyy-MM-dd') }}\\n- \\\"вдругиден\\\" = {{ $today.plus({days: 2}).format('yyyy-MM-dd') }}\\n- \\\"в понеделник\\\" = изчисли датата\\n- \\\"след седмица\\\" = {{ $today.plus({weeks: 1}).format('yyyy-MM-dd') }}\"\n    },\n    {\n      \"role\": \"user\",\n      \"content\": \"{{ $('Extract Message Data').item.json.message }}\"\n    }\n  ],\n  \"response_format\": { \"type\": \"json_object\" },\n  \"temperature\": 0.3\n}",
+        "options": {}
+      },
+      "id": "ai-intent-parser",
+      "name": "AI Intent Parser",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1140,
+        200
+      ],
+      "notesInFlow": true,
+      "notes": "NOTE: Replace YOUR_OPENAI_API_KEY_HERE with your actual OpenAI API key"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Parse AI response\nconst aiResponse = $input.first().json;\nconst content = aiResponse.choices?.[0]?.message?.content || '{}';\nconst parsed = JSON.parse(content);\n\n// Get original message data\nconst messageData = $('Extract Message Data').first().json;\nconst logData = $('Log Inbound Message').first().json;\n\nreturn [{\n  json: {\n    phone: messageData.phone,\n    message: messageData.message,\n    pushName: messageData.pushName,\n    conversationId: logData.conversationId,\n    intent: parsed.intent || 'general_inquiry',\n    preferredDate: parsed.preferredDate,\n    preferredTime: parsed.preferredTime,\n    procedureType: parsed.procedureType,\n    patientName: parsed.patientName || messageData.pushName\n  }\n}];"
+      },
+      "id": "parse-ai-response",
+      "name": "Parse AI Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1360,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "leftValue": "",
+                  "caseSensitive": true,
+                  "typeValidation": "strict"
+                },
+                "combinator": "and",
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.intent }}",
+                    "rightValue": "booking_request",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ]
+              },
+              "renameOutput": true,
+              "outputKey": "booking"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "leftValue": "",
+                  "caseSensitive": true,
+                  "typeValidation": "strict"
+                },
+                "combinator": "and",
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.intent }}",
+                    "rightValue": "availability_inquiry",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ]
+              },
+              "renameOutput": true,
+              "outputKey": "availability"
+            }
+          ],
+          "fallbackOutput": {
+            "fallbackOutput": "extra",
+            "outputKey": "other"
+          }
+        },
+        "options": {}
+      },
+      "id": "switch-intent",
+      "name": "Route by Intent",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3,
+      "position": [
+        1580,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "http://localhost:3000/api/n8n/availability",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-API-Key",
+              "value": "dental-n8n-whatsapp-booking-2026"
+            }
+          ]
+        },
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "date",
+              "value": "={{ $json.preferredDate || $today.plus({days: 1}).format('yyyy-MM-dd') }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "check-availability",
+      "name": "Check Availability",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1800,
+        100
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "leftValue": "",
+            "caseSensitive": true,
+            "typeValidation": "strict"
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "leftValue": "={{ $json.available }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true"
+              }
+            }
+          ]
+        }
+      },
+      "id": "if-available",
+      "name": "Slots Available?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        2020,
+        100
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://localhost:3000/api/n8n/book-appointment",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-API-Key",
+              "value": "dental-n8n-whatsapp-booking-2026"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"doctorId\": \"{{ $json.slots[0].doctorId }}\",\n  \"patientPhone\": \"{{ $('Parse AI Response').first().json.phone }}\",\n  \"patientName\": \"{{ $('Parse AI Response').first().json.patientName }}\",\n  \"appointmentDate\": \"{{ $json.slots[0].date }}\",\n  \"startTime\": \"{{ $('Parse AI Response').first().json.preferredTime || $json.slots[0].startTime }}\",\n  \"type\": \"{{ $('Parse AI Response').first().json.procedureType || 'Преглед' }}\",\n  \"conversationId\": \"{{ $('Parse AI Response').first().json.conversationId }}\"\n}",
+        "options": {}
+      },
+      "id": "create-booking",
+      "name": "Create Booking",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2240,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "message",
+        "operation": "sendText",
+        "instanceName": "settbg",
+        "remoteJid": "={{ $('Parse AI Response').first().json.phone }}@s.whatsapp.net",
+        "message": "✅ *Часът е запазен успешно\\!*\n\n📅 *Дата:* {{ $json.appointment.formattedDate }}\n⏰ *Час:* {{ $json.appointment.startTime }}\n👨‍⚕️ *Лекар:* {{ $json.appointment.doctorName }}\n📋 *Процедура:* {{ $json.appointment.type }}\n\nОчакваме те\\! Ако искаш да промениш часа, отговори на това съобщение.\n\n_Dental Dashboard_",
+        "options": {}
+      },
+      "id": "send-confirmation",
+      "name": "Send Booking Confirmation",
+      "type": "n8n-nodes-evolution-api-english.evolutionApi",
+      "typeVersion": 1,
+      "position": [
+        2460,
+        0
+      ],
+      "credentials": {
+        "evolutionApi": {
+          "id": "XQSyFEVuFnjkHYYS",
+          "name": "Evolution account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "message",
+        "operation": "sendText",
+        "instanceName": "settbg",
+        "remoteJid": "={{ $('Parse AI Response').first().json.phone }}@s.whatsapp.net",
+        "message": "😔 За съжаление, няма свободни часове за избраната дата.\n\n📅 Свободни дни за следващата седмица:\n• Понеделник - Петък: 09:00 - 18:00\n• Събота: 09:00 - 14:00\n\nМоля, напиши друга дата или се обади на рецепцията.\n\n_Dental Dashboard_",
+        "options": {}
+      },
+      "id": "send-no-slots",
+      "name": "Send No Slots Available",
+      "type": "n8n-nodes-evolution-api-english.evolutionApi",
+      "typeVersion": 1,
+      "position": [
+        2240,
+        200
+      ],
+      "credentials": {
+        "evolutionApi": {
+          "id": "XQSyFEVuFnjkHYYS",
+          "name": "Evolution account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "message",
+        "operation": "sendText",
+        "instanceName": "settbg",
+        "remoteJid": "={{ $json.phone }}@s.whatsapp.net",
+        "message": "Здравей\\! 👋\n\nБлагодаря за съобщението. Как мога да ти помогна?\n\n📅 *Запази час* - напиши \"Искам час за [дата]\" или \"Запази ми час утре в 10\"\n\n❓ *Въпроси* - свържи се с нас на телефон\n\n_Dental Dashboard_",
+        "options": {}
+      },
+      "id": "send-help",
+      "name": "Send Help Message",
+      "type": "n8n-nodes-evolution-api-english.evolutionApi",
+      "typeVersion": 1,
+      "position": [
+        1800,
+        400
+      ],
+      "credentials": {
+        "evolutionApi": {
+          "id": "XQSyFEVuFnjkHYYS",
+          "name": "Evolution account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\"success\": true, \"processed\": true}",
+        "options": {}
+      },
+      "id": "response-success",
+      "name": "Response Success",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        2680,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\"success\": true, \"skipped\": \"not_text_message\"}",
+        "options": {}
+      },
+      "id": "response-skip",
+      "name": "Response Skip",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        700,
+        400
+      ]
+    }
+  ],
+  "connections": {
+    "WhatsApp Webhook": {
+      "main": [
+        [
+          {
+            "node": "Is Text Message?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Text Message?": {
+      "main": [
+        [
+          {
+            "node": "Extract Message Data",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Response Skip",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Message Data": {
+      "main": [
+        [
+          {
+            "node": "Log Inbound Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log Inbound Message": {
+      "main": [
+        [
+          {
+            "node": "AI Intent Parser",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Intent Parser": {
+      "main": [
+        [
+          {
+            "node": "Parse AI Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse AI Response": {
+      "main": [
+        [
+          {
+            "node": "Route by Intent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Route by Intent": {
+      "main": [
+        [
+          {
+            "node": "Check Availability",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Check Availability",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Send Help Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Availability": {
+      "main": [
+        [
+          {
+            "node": "Slots Available?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Slots Available?": {
+      "main": [
+        [
+          {
+            "node": "Create Booking",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Send No Slots Available",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Booking": {
+      "main": [
+        [
+          {
+            "node": "Send Booking Confirmation",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Booking Confirmation": {
+      "main": [
+        [
+          {
+            "node": "Response Success",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send No Slots Available": {
+      "main": [
+        [
+          {
+            "node": "Response Success",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Help Message": {
+      "main": [
+        [
+          {
+            "node": "Response Success",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "Europe/Sofia"
+  },
+  "staticData": null,
+  "tags": [
+    {
+      "name": "whatsapp",
+      "id": "1"
+    },
+    {
+      "name": "booking",
+      "id": "2"
+    }
+  ],
+  "triggerCount": 1,
+  "meta": {
+    "templateId": "dental-whatsapp-booking",
+    "instanceId": "dental-dashboard"
+  }
+}

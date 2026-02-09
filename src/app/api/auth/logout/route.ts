@@ -17,13 +17,31 @@ export async function POST() {
         .eq('token', sessionToken)
     }
 
-    // Clear cookie
+    // Clear all auth cookies
     const response = NextResponse.json({ success: true })
+
     response.cookies.set('session_token', '', {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax',
-      maxAge: 0
+      maxAge: 0,
+      path: '/'
+    })
+
+    response.cookies.set('session', '', {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      maxAge: 0,
+      path: '/'
+    })
+
+    response.cookies.set('user', '', {
+      httpOnly: false,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      maxAge: 0,
+      path: '/'
     })
 
     return response

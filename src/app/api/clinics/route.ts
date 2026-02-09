@@ -41,7 +41,7 @@ export async function GET() {
 export async function POST(request: Request) {
   try {
     const body = await request.json()
-    const { name, whatsapp_instance } = body
+    const { name, address, phone, whatsapp_instance } = body
 
     if (!name) {
       return NextResponse.json({ error: 'Името е задължително' }, { status: 400 })
@@ -49,9 +49,14 @@ export async function POST(request: Request) {
 
     const supabase = createServerSupabaseClient()
 
+    const insertData: Record<string, any> = { name }
+    if (address) insertData.address = address
+    if (phone) insertData.phone = phone
+    if (whatsapp_instance) insertData.whatsapp_instance = whatsapp_instance
+
     const { data: clinic, error } = await supabase
       .from('clinics')
-      .insert({ name, whatsapp_instance })
+      .insert(insertData)
       .select()
       .single()
 
