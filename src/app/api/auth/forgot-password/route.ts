@@ -78,12 +78,17 @@ export async function POST(request: Request) {
     console.log('Sending password reset to WhatsApp:', whatsappPhone)
 
     try {
+      // Ensure resetLink has no whitespace - trim and verify
+      const cleanResetLink = resetLink.trim()
+      console.log('Sending clean reset link:', cleanResetLink)
+      console.log('Link length:', cleanResetLink.length)
+
       const webhookResponse = await fetch(`${N8N_WEBHOOK_URL}/send-password-reset`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           phone: whatsappPhone,
-          resetLink,
+          resetLink: cleanResetLink,
           userName: user.name || 'Потребител'
         })
       })
