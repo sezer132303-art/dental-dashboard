@@ -1,7 +1,7 @@
 'use client'
 
-import { useEffect, useState } from 'react'
-import { ChevronLeft, ChevronRight, Loader2, Clock, User } from 'lucide-react'
+import { useEffect, useState, useRef } from 'react'
+import { ChevronLeft, ChevronRight, Loader2, Clock, User, CalendarDays } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 interface Doctor {
@@ -45,12 +45,26 @@ export default function CalendarPage() {
   const [appointments, setAppointments] = useState<Appointment[]>([])
   const [loading, setLoading] = useState(true)
   const [selectedDoctor, setSelectedDoctor] = useState<Doctor | null>(null)
+  const [showDatePicker, setShowDatePicker] = useState(false)
+  const [pickerMonth, setPickerMonth] = useState(new Date())
+  const datePickerRef = useRef<HTMLDivElement>(null)
   const [currentWeekStart, setCurrentWeekStart] = useState<Date>(() => {
     const now = new Date()
     const day = now.getDay()
     const diff = now.getDate() - day + (day === 0 ? -6 : 1) // Monday
     return new Date(now.setDate(diff))
   })
+
+  // Close date picker when clicking outside
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (datePickerRef.current && !datePickerRef.current.contains(event.target as Node)) {
+        setShowDatePicker(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [])
 
   // Fetch doctors
   useEffect(() => {
@@ -155,6 +169,44 @@ export default function CalendarPage() {
     setCurrentWeekStart(new Date(now.setDate(diff)))
   }
 
+  const goToDate = (date: Date) => {
+    const day = date.getDay()
+    const diff = date.getDate() - day + (day === 0 ? -6 : 1)
+    const weekStart = new Date(date)
+    weekStart.setDate(diff)
+    setCurrentWeekStart(weekStart)
+    setShowDatePicker(false)
+  }
+
+  const getMonthDays = (date: Date) => {
+    const year = date.getFullYear()
+    const month = date.getMonth()
+    const firstDay = new Date(year, month, 1)
+    const lastDay = new Date(year, month + 1, 0)
+    const days: (Date | null)[] = []
+
+    // Add empty days for alignment (week starts on Monday)
+    const startDay = firstDay.getDay() === 0 ? 6 : firstDay.getDay() - 1
+    for (let i = 0; i < startDay; i++) {
+      days.push(null)
+    }
+
+    // Add days of the month
+    for (let i = 1; i <= lastDay.getDate(); i++) {
+      days.push(new Date(year, month, i))
+    }
+
+    return days
+  }
+
+  const prevPickerMonth = () => {
+    setPickerMonth(new Date(pickerMonth.getFullYear(), pickerMonth.getMonth() - 1, 1))
+  }
+
+  const nextPickerMonth = () => {
+    setPickerMonth(new Date(pickerMonth.getFullYear(), pickerMonth.getMonth() + 1, 1))
+  }
+
   const isToday = (date: Date) => {
     const today = new Date()
     return formatDate(date) === formatDate(today)
@@ -222,9 +274,95 @@ export default function CalendarPage() {
           </button>
         </div>
 
-        <h2 className="text-lg font-semibold text-gray-900">
-          {currentWeekStart.toLocaleDateString('bg-BG', { month: 'long', year: 'numeric' })}
-        </h2>
+        {/* Clickable Date Header with Date Picker */}
+        <div className="relative" ref={datePickerRef}>
+          <button
+            onClick={() => {
+              setPickerMonth(currentWeekStart)
+              setShowDatePicker(!showDatePicker)
+            }}
+            className="flex items-center gap-2 px-3 py-2 hover:bg-gray-100 rounded-lg transition"
+          >
+            <CalendarDays className="w-5 h-5 text-gray-500" />
+            <h2 className="text-lg font-semibold text-gray-900">
+              {currentWeekStart.toLocaleDateString('bg-BG', { month: 'long', year: 'numeric' })}
+            </h2>
+          </button>
+
+          {/* Date Picker Dropdown */}
+          {showDatePicker && (
+            <div className="absolute top-full left-1/2 -translate-x-1/2 mt-2 bg-white rounded-xl shadow-lg border border-gray-200 p-4 z-50 w-72">
+              {/* Month Navigation */}
+              <div className="flex items-center justify-between mb-4">
+                <button
+                  onClick={prevPickerMonth}
+                  className="p-1 hover:bg-gray-100 rounded-lg"
+                >
+                  <ChevronLeft className="w-5 h-5" />
+                </button>
+                <span className="font-semibold text-gray-900">
+                  {pickerMonth.toLocaleDateString('bg-BG', { month: 'long', year: 'numeric' })}
+                </span>
+                <button
+                  onClick={nextPickerMonth}
+                  className="p-1 hover:bg-gray-100 rounded-lg"
+                >
+                  <ChevronRight className="w-5 h-5" />
+                </button>
+              </div>
+
+              {/* Day Headers */}
+              <div className="grid grid-cols-7 gap-1 mb-2">
+                {['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Нд'].map((day) => (
+                  <div key={day} className="text-center text-xs font-medium text-gray-500 py-1">
+                    {day}
+                  </div>
+                ))}
+              </div>
+
+              {/* Days Grid */}
+              <div className="grid grid-cols-7 gap-1">
+                {getMonthDays(pickerMonth).map((day, index) => (
+                  <button
+                    key={index}
+                    onClick={() => day && goToDate(day)}
+                    disabled={!day}
+                    className={cn(
+                      'w-8 h-8 rounded-lg text-sm transition',
+                      !day && 'invisible',
+                      day && isToday(day) && 'bg-blue-600 text-white font-bold',
+                      day && !isToday(day) && 'hover:bg-gray-100 text-gray-900',
+                      day && formatDate(day) >= formatDate(currentWeekStart) &&
+                        formatDate(day) <= formatDate(addDays(currentWeekStart, 6)) &&
+                        !isToday(day) && 'bg-blue-100 text-blue-700'
+                    )}
+                  >
+                    {day?.getDate()}
+                  </button>
+                ))}
+              </div>
+
+              {/* Quick Actions */}
+              <div className="flex gap-2 mt-4 pt-4 border-t border-gray-100">
+                <button
+                  onClick={() => {
+                    goToDate(new Date())
+                    setShowDatePicker(false)
+                  }}
+                  className="flex-1 px-3 py-2 text-sm font-medium text-blue-600 hover:bg-blue-50 rounded-lg"
+                >
+                  Днес
+                </button>
+                <button
+                  onClick={() => setShowDatePicker(false)}
+                  className="flex-1 px-3 py-2 text-sm font-medium text-gray-600 hover:bg-gray-100 rounded-lg"
+                >
+                  Затвори
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
 
         <div className="flex items-center gap-4 text-sm text-gray-600">
           <span>Тази седмица: <strong className="text-gray-900">{weekAppointments}</strong> часа</span>

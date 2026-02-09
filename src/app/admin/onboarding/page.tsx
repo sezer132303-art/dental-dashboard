@@ -11,7 +11,9 @@ import {
   ChevronRight,
   Copy,
   Eye,
-  EyeOff
+  EyeOff,
+  Plus,
+  Trash2
 } from 'lucide-react'
 
 interface OnboardingData {
@@ -27,7 +29,7 @@ interface OnboardingData {
   userPassword: string
 
   // Step 3: Google Calendar
-  googleCalendarId: string
+  googleCalendars: { name: string; calendarId: string }[]
   googleServiceAccount: string
 
   // Step 4: WhatsApp
@@ -44,7 +46,7 @@ const initialData: OnboardingData = {
   userPhone: '',
   userEmail: '',
   userPassword: '',
-  googleCalendarId: '',
+  googleCalendars: [{ name: '', calendarId: '' }],
   googleServiceAccount: '',
   whatsappInstance: '',
   whatsappApiKey: '',
@@ -150,9 +152,30 @@ export default function OnboardingPage() {
     }
   }
 
+  function addCalendar() {
+    setData({
+      ...data,
+      googleCalendars: [...data.googleCalendars, { name: '', calendarId: '' }]
+    })
+  }
+
+  function removeCalendar(index: number) {
+    setData({
+      ...data,
+      googleCalendars: data.googleCalendars.filter((_, i) => i !== index)
+    })
+  }
+
+  function updateCalendar(index: number, field: 'name' | 'calendarId', value: string) {
+    const updated = [...data.googleCalendars]
+    updated[index][field] = value
+    setData({ ...data, googleCalendars: updated })
+  }
+
   async function handleStep3() {
     // Google Calendar is optional
-    if (data.googleCalendarId || data.googleServiceAccount) {
+    const validCalendars = data.googleCalendars.filter(c => c.calendarId.trim())
+    if (validCalendars.length > 0 || data.googleServiceAccount) {
       setLoading(true)
       setError('')
 
@@ -161,7 +184,7 @@ export default function OnboardingPage() {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            google_calendar_id: data.googleCalendarId,
+            google_calendars: JSON.stringify(validCalendars),
             google_service_account: data.googleServiceAccount
           })
         })
@@ -406,23 +429,62 @@ export default function OnboardingPage() {
           <div className="space-y-6">
             <div>
               <h2 className="text-xl font-semibold text-gray-900">Google Calendar интеграция</h2>
-              <p className="text-gray-500 mt-1">Свържи Google Calendar за управление на часовете (опционално)</p>
+              <p className="text-gray-500 mt-1">Свържи един или повече Google календари (опционално)</p>
             </div>
 
             <div className="space-y-4">
+              {/* Multiple Calendars */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Calendar ID
-                </label>
-                <input
-                  type="text"
-                  value={data.googleCalendarId}
-                  onChange={(e) => setData({ ...data, googleCalendarId: e.target.value })}
-                  placeholder="abc123@group.calendar.google.com"
-                  className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 text-gray-900"
-                />
-                <p className="text-xs text-gray-400 mt-1">
-                  Намери в Google Calendar Settings → Calendar ID
+                <div className="flex items-center justify-between mb-2">
+                  <label className="block text-sm font-medium text-gray-700">
+                    Календари
+                  </label>
+                  <button
+                    type="button"
+                    onClick={addCalendar}
+                    className="flex items-center gap-1 text-sm text-blue-600 hover:text-blue-700"
+                  >
+                    <Plus className="w-4 h-4" />
+                    Добави календар
+                  </button>
+                </div>
+
+                <div className="space-y-3">
+                  {data.googleCalendars.map((calendar, index) => (
+                    <div key={index} className="p-4 border rounded-lg bg-gray-50 space-y-3">
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm font-medium text-gray-700">
+                          Календар {index + 1}
+                        </span>
+                        {data.googleCalendars.length > 1 && (
+                          <button
+                            type="button"
+                            onClick={() => removeCalendar(index)}
+                            className="text-red-500 hover:text-red-600 p-1"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        )}
+                      </div>
+                      <input
+                        type="text"
+                        value={calendar.name}
+                        onChange={(e) => updateCalendar(index, 'name', e.target.value)}
+                        placeholder="Име (напр. Д-р Иванов)"
+                        className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 text-gray-900"
+                      />
+                      <input
+                        type="text"
+                        value={calendar.calendarId}
+                        onChange={(e) => updateCalendar(index, 'calendarId', e.target.value)}
+                        placeholder="Calendar ID (abc123@group.calendar.google.com)"
+                        className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 text-gray-900"
+                      />
+                    </div>
+                  ))}
+                </div>
+                <p className="text-xs text-gray-400 mt-2">
+                  Намери Calendar ID в Google Calendar Settings → Calendar ID
                 </p>
               </div>
 
@@ -437,13 +499,16 @@ export default function OnboardingPage() {
                   rows={4}
                   className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 font-mono text-sm text-gray-900"
                 />
+                <p className="text-xs text-gray-400 mt-1">
+                  Един Service Account може да има достъп до множество календари
+                </p>
               </div>
             </div>
 
             <div className="flex gap-3">
               <button
                 onClick={() => setStep(4)}
-                className="flex-1 px-4 py-3 border rounded-lg hover:bg-gray-50"
+                className="flex-1 px-4 py-3 border rounded-lg hover:bg-gray-50 text-gray-700"
               >
                 Пропусни
               </button>
