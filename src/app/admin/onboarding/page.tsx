@@ -268,7 +268,7 @@ export default function OnboardingPage() {
                   value={data.clinicName}
                   onChange={(e) => setData({ ...data, clinicName: e.target.value })}
                   placeholder="Дентална Клиника София"
-                  className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 text-gray-900"
                 />
               </div>
 
@@ -281,7 +281,7 @@ export default function OnboardingPage() {
                   value={data.clinicAddress}
                   onChange={(e) => setData({ ...data, clinicAddress: e.target.value })}
                   placeholder="ул. Витоша 100, София"
-                  className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 text-gray-900"
                 />
               </div>
 
@@ -294,7 +294,7 @@ export default function OnboardingPage() {
                   value={data.clinicPhone}
                   onChange={(e) => setData({ ...data, clinicPhone: e.target.value })}
                   placeholder="+359 2 123 4567"
-                  className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 text-gray-900"
                 />
               </div>
             </div>
@@ -328,7 +328,7 @@ export default function OnboardingPage() {
                   value={data.userName}
                   onChange={(e) => setData({ ...data, userName: e.target.value })}
                   placeholder="Иван Иванов"
-                  className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 text-gray-900"
                 />
               </div>
 
@@ -341,7 +341,7 @@ export default function OnboardingPage() {
                   value={data.userPhone}
                   onChange={(e) => setData({ ...data, userPhone: e.target.value })}
                   placeholder="0888 123 456"
-                  className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 text-gray-900"
                 />
               </div>
 
@@ -354,7 +354,7 @@ export default function OnboardingPage() {
                   value={data.userEmail}
                   onChange={(e) => setData({ ...data, userEmail: e.target.value })}
                   placeholder="clinic@example.com"
-                  className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 text-gray-900"
                 />
               </div>
 
@@ -369,7 +369,7 @@ export default function OnboardingPage() {
                       value={data.userPassword}
                       onChange={(e) => setData({ ...data, userPassword: e.target.value })}
                       placeholder="Въведи парола"
-                      className="w-full px-4 py-2 pr-10 border rounded-lg focus:ring-2 focus:ring-blue-500"
+                      className="w-full px-4 py-2 pr-10 border rounded-lg focus:ring-2 focus:ring-blue-500 text-gray-900"
                     />
                     <button
                       type="button"
@@ -419,7 +419,7 @@ export default function OnboardingPage() {
                   value={data.googleCalendarId}
                   onChange={(e) => setData({ ...data, googleCalendarId: e.target.value })}
                   placeholder="abc123@group.calendar.google.com"
-                  className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 text-gray-900"
                 />
                 <p className="text-xs text-gray-400 mt-1">
                   Намери в Google Calendar Settings → Calendar ID
@@ -435,7 +435,7 @@ export default function OnboardingPage() {
                   onChange={(e) => setData({ ...data, googleServiceAccount: e.target.value })}
                   placeholder='{"type": "service_account", ...}'
                   rows={4}
-                  className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 font-mono text-sm"
+                  className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 font-mono text-sm text-gray-900"
                 />
               </div>
             </div>
@@ -477,7 +477,7 @@ export default function OnboardingPage() {
                   value={data.evolutionApiUrl}
                   onChange={(e) => setData({ ...data, evolutionApiUrl: e.target.value })}
                   placeholder="https://evo.example.com"
-                  className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 text-gray-900"
                 />
               </div>
 
@@ -490,7 +490,7 @@ export default function OnboardingPage() {
                   value={data.whatsappInstance}
                   onChange={(e) => setData({ ...data, whatsappInstance: e.target.value })}
                   placeholder="clinic_sofia"
-                  className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 text-gray-900"
                 />
               </div>
 
@@ -503,7 +503,7 @@ export default function OnboardingPage() {
                   value={data.whatsappApiKey}
                   onChange={(e) => setData({ ...data, whatsappApiKey: e.target.value })}
                   placeholder="your-api-key"
-                  className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 text-gray-900"
                 />
               </div>
             </div>
