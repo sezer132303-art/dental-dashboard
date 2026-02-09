@@ -1,9 +1,10 @@
 import { NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase'
 
-const N8N_WEBHOOK_URL = process.env.N8N_WEBHOOK_URL || 'https://mwqopo2p.rpcld.net/webhook'
+const N8N_WEBHOOK_URL = (process.env.N8N_WEBHOOK_URL || 'https://mwqopo2p.rpcld.net/webhook').trim()
 // Production URL hardcoded as fallback to ensure links always work
-const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://dental-dashboard-nu.vercel.app'
+// Use trim() to remove any trailing whitespace from env variable
+const APP_URL = (process.env.NEXT_PUBLIC_APP_URL || 'https://dental-dashboard-nu.vercel.app').trim().replace(/\/$/, '')
 
 // Normalize phone number to international format (359XXXXXXXXX)
 function normalizePhone(phone: string): string {

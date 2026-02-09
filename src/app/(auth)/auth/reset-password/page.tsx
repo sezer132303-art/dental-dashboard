@@ -11,30 +11,48 @@ function ResetPasswordForm() {
   const [success, setSuccess] = useState(false)
   const [error, setError] = useState('')
   const [tokenValid, setTokenValid] = useState<boolean | null>(null)
+  const [mounted, setMounted] = useState(false)
   const router = useRouter()
   const searchParams = useSearchParams()
   const token = searchParams.get('token')
 
+  // Ensure component is mounted before doing anything
   useEffect(() => {
+    setMounted(true)
+  }, [])
+
+  useEffect(() => {
+    if (!mounted) return
+
+    console.log('Reset password page loaded, token:', token ? 'present' : 'missing')
+
     if (!token) {
+      console.log('No token found in URL')
       setTokenValid(false)
+      setError('Линкът е непълен. Моля, използвайте целия линк от съобщението.')
       return
     }
 
     // Verify token is valid
-    fetch(`/api/auth/verify-reset-token?token=${token}`)
-      .then(res => res.json())
+    console.log('Verifying token...')
+    fetch(`/api/auth/verify-reset-token?token=${encodeURIComponent(token)}`)
+      .then(res => {
+        console.log('Token verification response status:', res.status)
+        return res.json()
+      })
       .then(data => {
+        console.log('Token verification result:', data)
         setTokenValid(data.valid)
         if (!data.valid) {
           setError(data.error || 'Невалиден или изтекъл линк')
         }
       })
-      .catch(() => {
+      .catch((err) => {
+        console.error('Token verification error:', err)
         setTokenValid(false)
         setError('Грешка при проверка на линка')
       })
-  }, [token])
+  }, [token, mounted])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -75,7 +93,8 @@ function ResetPasswordForm() {
     }
   }
 
-  if (tokenValid === null) {
+  // Show loading while not mounted or token is being validated
+  if (!mounted || tokenValid === null) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-600 to-purple-700 p-4">
         <div className="bg-white rounded-2xl shadow-2xl p-8 max-w-md w-full text-center">
