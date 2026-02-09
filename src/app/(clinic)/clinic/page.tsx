@@ -1,178 +1,368 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { Calendar, Users, MessageCircle, TrendingUp, Clock, CheckCircle } from 'lucide-react'
+import {
+  TrendingUp,
+  TrendingDown,
+  Users,
+  Calendar,
+  AlertTriangle,
+  CheckCircle2,
+  Clock,
+  Loader2,
+  Stethoscope
+} from 'lucide-react'
+import { cn } from '@/lib/utils'
+import {
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+  PieChart,
+  Pie,
+  Cell
+} from 'recharts'
 
-interface ClinicMetrics {
-  totalAppointments: number
-  completedAppointments: number
-  pendingAppointments: number
-  totalPatients: number
-  activeConversations: number
+interface DoctorStats {
+  id: string
+  name: string
+  specialty: string | null
+  color: string
+  patientsThisWeek: number
+  completed: number
+  noShow: number
   attendanceRate: number
 }
 
-export default function ClinicDashboard() {
-  const [metrics, setMetrics] = useState<ClinicMetrics | null>(null)
+interface Metrics {
+  attendanceRate: number
+  attendanceChange: number
+  totalPatients: number
+  appointmentsThisWeek: number
+  appointmentsToday: number
+  noShows: number
+  doctors: DoctorStats[]
+}
+
+const COLORS = ['#3B82F6', '#8B5CF6', '#10B981', '#F59E0B', '#EF4444', '#EC4899']
+
+interface KpiCardProps {
+  title: string
+  value: string | number
+  change?: number
+  icon: React.ElementType
+  iconBg: string
+  suffix?: string
+}
+
+function KpiCard({ title, value, change, icon: Icon, iconBg, suffix }: KpiCardProps) {
+  return (
+    <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
+      <div className="flex items-start justify-between">
+        <div>
+          <p className="text-sm font-medium text-gray-500 mb-1">{title}</p>
+          <p className="text-2xl font-bold text-gray-900">
+            {value}{suffix}
+          </p>
+          {change !== undefined && change !== 0 && (
+            <div className={cn(
+              'flex items-center gap-1 mt-2 text-sm font-medium',
+              change >= 0 ? 'text-green-600' : 'text-red-600'
+            )}>
+              {change >= 0 ? (
+                <TrendingUp className="w-4 h-4" />
+              ) : (
+                <TrendingDown className="w-4 h-4" />
+              )}
+              <span>{Math.abs(change)}%</span>
+              <span className="text-gray-600 font-normal">от миналата седмица</span>
+            </div>
+          )}
+        </div>
+        <div className={cn('p-3 rounded-xl', iconBg)}>
+          <Icon className="w-6 h-6 text-white" />
+        </div>
+      </div>
+    </div>
+  )
+}
+
+export default function ClinicDashboardPage() {
+  const [metrics, setMetrics] = useState<Metrics | null>(null)
   const [loading, setLoading] = useState(true)
-  const [recentAppointments, setRecentAppointments] = useState<any[]>([])
+  const [error, setError] = useState('')
 
   useEffect(() => {
-    async function fetchData() {
+    const fetchMetrics = async () => {
       try {
-        // Fetch clinic-specific metrics
-        const [metricsRes, appointmentsRes] = await Promise.all([
+        // Fetch clinic metrics and doctors
+        const [metricsRes, doctorsRes] = await Promise.all([
           fetch('/api/clinic/metrics'),
-          fetch('/api/clinic/appointments?limit=5')
+          fetch('/api/clinic/doctors')
         ])
 
-        if (metricsRes.ok) {
-          const data = await metricsRes.json()
-          setMetrics(data)
-        }
+        const metricsData = await metricsRes.json()
+        const doctorsData = await doctorsRes.json()
 
-        if (appointmentsRes.ok) {
-          const data = await appointmentsRes.json()
-          setRecentAppointments(data.appointments || [])
-        }
-      } catch (error) {
-        console.error('Error fetching clinic data:', error)
+        // Build metrics object
+        setMetrics({
+          attendanceRate: metricsData.attendanceRate || 0,
+          attendanceChange: 0,
+          totalPatients: metricsData.totalPatients || 0,
+          appointmentsThisWeek: metricsData.totalAppointments || 0,
+          appointmentsToday: metricsData.pendingAppointments || 0,
+          noShows: 0,
+          doctors: (doctorsData.doctors || []).map((d: any) => ({
+            id: d.id,
+            name: d.name,
+            specialty: d.specialty,
+            color: d.color || 'bg-blue-500',
+            patientsThisWeek: 0,
+            completed: 0,
+            noShow: 0,
+            attendanceRate: 100
+          }))
+        })
+      } catch (err) {
+        console.error('Error fetching metrics:', err)
+        setError('Грешка при зареждане на метрики')
       } finally {
         setLoading(false)
       }
     }
 
-    fetchData()
+    fetchMetrics()
+
+    // Auto-refresh every 5 minutes
+    const interval = setInterval(fetchMetrics, 5 * 60 * 1000)
+    return () => clearInterval(interval)
   }, [])
 
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-teal-600"></div>
+        <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
       </div>
     )
   }
 
-  const stats = [
-    {
-      name: 'Общо часове',
-      value: metrics?.totalAppointments || 0,
-      icon: Calendar,
-      color: 'bg-blue-500',
-      bgColor: 'bg-blue-50'
-    },
-    {
-      name: 'Завършени',
-      value: metrics?.completedAppointments || 0,
-      icon: CheckCircle,
-      color: 'bg-green-500',
-      bgColor: 'bg-green-50'
-    },
-    {
-      name: 'Предстоящи',
-      value: metrics?.pendingAppointments || 0,
-      icon: Clock,
-      color: 'bg-amber-500',
-      bgColor: 'bg-amber-50'
-    },
-    {
-      name: 'Пациенти',
-      value: metrics?.totalPatients || 0,
-      icon: Users,
-      color: 'bg-purple-500',
-      bgColor: 'bg-purple-50'
-    },
-    {
-      name: 'Активни чатове',
-      value: metrics?.activeConversations || 0,
-      icon: MessageCircle,
-      color: 'bg-teal-500',
-      bgColor: 'bg-teal-50'
-    },
-    {
-      name: 'Присъствие',
-      value: `${metrics?.attendanceRate || 0}%`,
-      icon: TrendingUp,
-      color: 'bg-indigo-500',
-      bgColor: 'bg-indigo-50'
-    },
-  ]
+  if (error || !metrics) {
+    return (
+      <div className="bg-red-50 text-red-600 p-4 rounded-lg">
+        {error || 'Грешка при зареждане на данни'}
+      </div>
+    )
+  }
+
+  // Prepare data for charts
+  const doctorChartData = metrics.doctors.map(d => ({
+    name: d.name.replace('д-р ', ''),
+    appointments: d.patientsThisWeek
+  }))
+
+  const totalDoctorAppointments = metrics.doctors.reduce((sum, d) => sum + d.patientsThisWeek, 0)
 
   return (
     <div className="space-y-6">
-      {/* Welcome section */}
-      <div className="bg-gradient-to-r from-teal-600 to-cyan-600 rounded-2xl p-6 text-white">
-        <h2 className="text-2xl font-bold mb-2">Добре дошли в клиника портала</h2>
-        <p className="text-teal-100">
-          Преглеждайте вашите часове, пациенти и WhatsApp разговори на едно място.
-        </p>
+      {/* KPI Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+        <KpiCard
+          title="Процент присъствие"
+          value={metrics.attendanceRate}
+          suffix="%"
+          change={metrics.attendanceChange}
+          icon={CheckCircle2}
+          iconBg="bg-green-500"
+        />
+        <KpiCard
+          title="Часове днес"
+          value={metrics.appointmentsToday}
+          icon={Clock}
+          iconBg="bg-blue-500"
+        />
+        <KpiCard
+          title="Часове тази седмица"
+          value={metrics.appointmentsThisWeek}
+          icon={Calendar}
+          iconBg="bg-purple-500"
+        />
+        <KpiCard
+          title="Общо пациенти"
+          value={metrics.totalPatients}
+          icon={Users}
+          iconBg="bg-indigo-500"
+        />
+        <KpiCard
+          title="Активни лекари"
+          value={metrics.doctors.length}
+          icon={Stethoscope}
+          iconBg="bg-cyan-500"
+        />
+        <KpiCard
+          title="Неявявания (седмица)"
+          value={metrics.noShows}
+          icon={AlertTriangle}
+          iconBg="bg-red-500"
+        />
       </div>
 
-      {/* Stats grid */}
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
-        {stats.map((stat) => (
-          <div
-            key={stat.name}
-            className="bg-white rounded-xl p-4 shadow-sm hover:shadow-md transition-shadow"
-          >
-            <div className={`w-10 h-10 ${stat.bgColor} rounded-lg flex items-center justify-center mb-3`}>
-              <stat.icon className={`w-5 h-5 ${stat.color.replace('bg-', 'text-')}`} />
-            </div>
-            <p className="text-2xl font-bold text-gray-900">{stat.value}</p>
-            <p className="text-xs text-gray-500">{stat.name}</p>
-          </div>
-        ))}
-      </div>
-
-      {/* Recent appointments */}
-      <div className="bg-white rounded-xl shadow-sm">
-        <div className="px-6 py-4 border-b">
-          <h3 className="text-lg font-semibold text-gray-900">Последни часове</h3>
-        </div>
-        <div className="divide-y">
-          {recentAppointments.length === 0 ? (
-            <div className="px-6 py-8 text-center text-gray-500">
-              Няма скорошни часове
-            </div>
+      {/* Charts */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Doctor Appointments Chart */}
+        <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
+          <h3 className="text-lg font-semibold text-gray-900 mb-4">
+            Часове по лекари (тази седмица)
+          </h3>
+          {doctorChartData.length > 0 && totalDoctorAppointments > 0 ? (
+            <ResponsiveContainer width="100%" height={300}>
+              <BarChart data={doctorChartData}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                <XAxis dataKey="name" stroke="#374151" fontSize={12} />
+                <YAxis stroke="#374151" fontSize={12} />
+                <Tooltip
+                  contentStyle={{
+                    backgroundColor: 'white',
+                    border: '1px solid #e5e7eb',
+                    borderRadius: '8px'
+                  }}
+                />
+                <Bar
+                  dataKey="appointments"
+                  fill="#8B5CF6"
+                  radius={[4, 4, 0, 0]}
+                />
+              </BarChart>
+            </ResponsiveContainer>
           ) : (
-            recentAppointments.map((apt) => (
-              <div key={apt.id} className="px-6 py-4 flex items-center justify-between">
-                <div className="flex items-center gap-4">
-                  <div className="w-10 h-10 bg-teal-100 rounded-full flex items-center justify-center">
-                    <span className="text-sm font-medium text-teal-700">
-                      {(apt.client_name || 'П').charAt(0)}
-                    </span>
-                  </div>
-                  <div>
-                    <p className="font-medium text-gray-900">{apt.client_name || 'Пациент'}</p>
-                    <p className="text-sm text-gray-500">{apt.service}</p>
-                  </div>
-                </div>
-                <div className="text-right">
-                  <p className="text-sm font-medium text-gray-900">
-                    {new Date(apt.appointment_datetime).toLocaleDateString('bg-BG')}
-                  </p>
-                  <p className="text-xs text-gray-500">
-                    {new Date(apt.appointment_datetime).toLocaleTimeString('bg-BG', {
-                      hour: '2-digit',
-                      minute: '2-digit'
-                    })}
-                  </p>
-                </div>
-                <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                  apt.status === 'completed' ? 'bg-green-100 text-green-700' :
-                  apt.status === 'confirmed' ? 'bg-blue-100 text-blue-700' :
-                  apt.status === 'cancelled' ? 'bg-red-100 text-red-700' :
-                  'bg-gray-100 text-gray-700'
-                }`}>
-                  {apt.status === 'completed' ? 'Завършен' :
-                   apt.status === 'confirmed' ? 'Потвърден' :
-                   apt.status === 'cancelled' ? 'Отменен' : apt.status}
-                </span>
-              </div>
-            ))
+            <div className="h-[300px] flex items-center justify-center text-gray-400">
+              Няма данни за тази седмица
+            </div>
           )}
         </div>
+
+        {/* Doctor Distribution Pie */}
+        <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
+          <h3 className="text-lg font-semibold text-gray-900 mb-4">
+            Разпределение по лекари
+          </h3>
+          {doctorChartData.length > 0 && totalDoctorAppointments > 0 ? (
+            <ResponsiveContainer width="100%" height={300}>
+              <PieChart>
+                <Pie
+                  data={doctorChartData}
+                  cx="50%"
+                  cy="50%"
+                  innerRadius={60}
+                  outerRadius={100}
+                  paddingAngle={2}
+                  dataKey="appointments"
+                  label={({ name, percent }) => `${name} (${((percent || 0) * 100).toFixed(0)}%)`}
+                  labelLine={false}
+                >
+                  {doctorChartData.map((entry, index) => (
+                    <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                  ))}
+                </Pie>
+                <Tooltip
+                  contentStyle={{
+                    backgroundColor: 'white',
+                    border: '1px solid #e5e7eb',
+                    borderRadius: '8px'
+                  }}
+                />
+              </PieChart>
+            </ResponsiveContainer>
+          ) : (
+            <div className="h-[300px] flex items-center justify-center text-gray-400">
+              Няма данни за тази седмица
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Doctor Stats Table */}
+      <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+        <div className="px-6 py-4 border-b border-gray-100">
+          <h3 className="text-lg font-semibold text-gray-900">
+            Статистика по лекари (тази седмица)
+          </h3>
+        </div>
+        {metrics.doctors.length > 0 ? (
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead className="bg-gray-50">
+                <tr>
+                  <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                    Лекар
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                    Специалност
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                    Общо часове
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                    Завършени
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                    Неявявания
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                    % Присъствие
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100">
+                {metrics.doctors.map((doctor) => (
+                  <tr key={doctor.id} className="hover:bg-gray-50">
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="flex items-center gap-3">
+                        <div
+                          className={cn(
+                            'w-8 h-8 rounded-full flex items-center justify-center text-white font-bold text-sm',
+                            doctor.color || 'bg-blue-500'
+                          )}
+                        >
+                          {doctor.name.split(' ')[1]?.charAt(0) || doctor.name.charAt(0)}
+                        </div>
+                        <span className="font-medium text-gray-900">{doctor.name}</span>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-gray-900">
+                      {doctor.specialty || 'Общ стоматолог'}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-gray-900 font-medium">
+                      {doctor.patientsThisWeek}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-green-600 font-medium">
+                      {doctor.completed}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-red-600 font-medium">
+                      {doctor.noShow}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <span className={cn(
+                        'font-semibold',
+                        doctor.attendanceRate >= 90 ? 'text-green-600' :
+                        doctor.attendanceRate >= 75 ? 'text-yellow-600' :
+                        'text-red-600'
+                      )}>
+                        {doctor.attendanceRate.toFixed(1)}%
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <div className="p-8 text-center text-gray-400">
+            Няма добавени лекари
+          </div>
+        )}
       </div>
     </div>
   )
