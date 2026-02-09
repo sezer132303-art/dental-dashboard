@@ -30,7 +30,6 @@ interface OnboardingData {
 
   // Step 3: Google Calendar
   googleCalendars: { name: string; calendarId: string }[]
-  googleServiceAccount: string
 
   // Step 4: WhatsApp
   whatsappInstance: string
@@ -47,7 +46,6 @@ const initialData: OnboardingData = {
   userEmail: '',
   userPassword: '',
   googleCalendars: [{ name: '', calendarId: '' }],
-  googleServiceAccount: '',
   whatsappInstance: '',
   whatsappApiKey: '',
   evolutionApiUrl: 'https://evo.settbg.com'
@@ -175,7 +173,7 @@ export default function OnboardingPage() {
   async function handleStep3() {
     // Google Calendar is optional
     const validCalendars = data.googleCalendars.filter(c => c.calendarId.trim())
-    if (validCalendars.length > 0 || data.googleServiceAccount) {
+    if (validCalendars.length > 0) {
       setLoading(true)
       setError('')
 
@@ -184,8 +182,7 @@ export default function OnboardingPage() {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            google_calendars: JSON.stringify(validCalendars),
-            google_service_account: data.googleServiceAccount
+            google_calendars: JSON.stringify(validCalendars)
           })
         })
       } catch (err) {
@@ -484,23 +481,15 @@ export default function OnboardingPage() {
                   ))}
                 </div>
                 <p className="text-xs text-gray-400 mt-2">
-                  Намери Calendar ID в Google Calendar Settings → Calendar ID
+                  Намери Calendar ID в Google Calendar → Settings → Integrate calendar
                 </p>
               </div>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Service Account JSON
-                </label>
-                <textarea
-                  value={data.googleServiceAccount}
-                  onChange={(e) => setData({ ...data, googleServiceAccount: e.target.value })}
-                  placeholder='{"type": "service_account", ...}'
-                  rows={4}
-                  className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 font-mono text-sm text-gray-900"
-                />
-                <p className="text-xs text-gray-400 mt-1">
-                  Един Service Account може да има достъп до множество календари
+              {/* Info box about n8n sync */}
+              <div className="p-4 bg-blue-50 border border-blue-100 rounded-lg">
+                <p className="text-sm text-blue-800">
+                  <strong>Синхронизацията</strong> с Google Calendar се извършва автоматично чрез n8n.
+                  Тук запазваме само Calendar ID за референция.
                 </p>
               </div>
             </div>
