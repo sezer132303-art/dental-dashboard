@@ -35,8 +35,7 @@ export async function POST(request: Request) {
 
     // If user exists
     if (existingUser) {
-      // Check if this user belongs to the SAME clinic we're creating for
-      // If they belong to a DIFFERENT clinic (or clinic is NULL/deleted), allow reuse
+      // Check if this user belongs to the SAME clinic we're creating for AND is active
       if (existingUser.clinic_id === clinicId && existingUser.is_active) {
         return NextResponse.json(
           { error: 'Потребител с този телефон вече съществува в тази клиника' },
@@ -44,19 +43,27 @@ export async function POST(request: Request) {
         )
       }
 
-      // User exists for a different/deleted clinic - delete the old user first
-      const { error: deleteError } = await supabase
+      // User exists for a different/deleted clinic - free up the phone number
+      // We can't delete due to potential foreign key constraints (appointments.created_by)
+      // Instead, we'll update the old user's phone to a unique archived value
+      const archivedPhone = `archived_${Date.now()}_${existingUser.phone}`
+      const { error: archiveError } = await supabase
         .from('users')
-        .delete()
+        .update({
+          phone: archivedPhone,
+          is_active: false
+        })
         .eq('id', existingUser.id)
 
-      if (deleteError) {
-        console.error('Delete old user error:', deleteError)
+      if (archiveError) {
+        console.error('Archive old user error:', archiveError)
         return NextResponse.json(
-          { error: 'Грешка при изтриване на стар потребител: ' + deleteError.message },
+          { error: 'Грешка при архивиране на стар потребител: ' + archiveError.message },
           { status: 500 }
         )
       }
+
+      console.log(`Archived old user ${existingUser.id} with phone ${existingUser.phone} -> ${archivedPhone}`)
     }
 
     // Create user with 'clinic' role
