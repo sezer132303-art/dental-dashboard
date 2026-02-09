@@ -47,7 +47,7 @@ export default function SettingsPage() {
               type="text"
               value={settings.clinicName}
               onChange={(e) => setSettings({ ...settings, clinicName: e.target.value })}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-900"
             />
           </div>
           <div>
@@ -55,7 +55,7 @@ export default function SettingsPage() {
             <select
               value={settings.timezone}
               onChange={(e) => setSettings({ ...settings, timezone: e.target.value })}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-900"
             >
               <option value="Europe/Sofia">Europe/Sofia (UTC+2/+3)</option>
             </select>
@@ -77,7 +77,7 @@ export default function SettingsPage() {
                 type="time"
                 value={settings.workingHoursStart}
                 onChange={(e) => setSettings({ ...settings, workingHoursStart: e.target.value })}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-900"
               />
             </div>
             <div>
@@ -86,7 +86,7 @@ export default function SettingsPage() {
                 type="time"
                 value={settings.workingHoursEnd}
                 onChange={(e) => setSettings({ ...settings, workingHoursEnd: e.target.value })}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-900"
               />
             </div>
           </div>
@@ -96,7 +96,7 @@ export default function SettingsPage() {
               type="time"
               value={settings.saturdayEnd}
               onChange={(e) => setSettings({ ...settings, saturdayEnd: e.target.value })}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-900"
             />
           </div>
           <div className="flex items-center gap-2">

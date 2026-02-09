@@ -91,7 +91,7 @@ export default function ClinicAppointments() {
               placeholder="Търсене по име, телефон или услуга..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500"
+              className="w-full pl-10 pr-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 text-gray-900"
             />
           </div>
 
@@ -104,7 +104,7 @@ export default function ClinicAppointments() {
                 setStatusFilter(e.target.value)
                 setPage(1)
               }}
-              className="border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-teal-500"
+              className="border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-teal-500 text-gray-900"
             >
               <option value="all">Всички статуси</option>
               <option value="confirmed">Потвърдени</option>
