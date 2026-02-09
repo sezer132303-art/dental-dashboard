@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { usePathname } from 'next/navigation'
+import { usePathname, useRouter } from 'next/navigation'
 import { cn } from '@/lib/utils'
 import {
   LayoutDashboard,
@@ -37,11 +37,22 @@ export default function DashboardLayout({
   children: React.ReactNode
 }) {
   const pathname = usePathname()
+  const router = useRouter()
   const [sidebarOpen, setSidebarOpen] = useState(false)
 
   // TODO: Get from session
   const isAdmin = true
   const userName = 'Администратор'
+
+  async function handleLogout() {
+    try {
+      await fetch('/api/auth/logout', { method: 'POST' })
+      router.push('/login')
+    } catch (error) {
+      console.error('Logout error:', error)
+      router.push('/login')
+    }
+  }
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -145,7 +156,11 @@ export default function DashboardLayout({
                   {isAdmin ? 'Администратор' : 'Лекар'}
                 </p>
               </div>
-              <button className="p-2 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100">
+              <button
+                onClick={handleLogout}
+                className="p-2 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100"
+                title="Изход"
+              >
                 <LogOut className="w-4 h-4" />
               </button>
             </div>

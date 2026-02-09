@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { Save, Bell, Clock, Globe } from 'lucide-react'
+import { Save, Bell, Clock, Globe, Loader2, Check } from 'lucide-react'
 
 export default function SettingsPage() {
   const [settings, setSettings] = useState({
@@ -14,6 +14,23 @@ export default function SettingsPage() {
     saturdayEnd: '15:00',
     sundayClosed: true
   })
+  const [saving, setSaving] = useState(false)
+  const [saved, setSaved] = useState(false)
+
+  async function handleSave() {
+    setSaving(true)
+    try {
+      // In a full implementation, this would save to the database
+      await new Promise(resolve => setTimeout(resolve, 500))
+      setSaved(true)
+      setTimeout(() => setSaved(false), 2000)
+    } catch (error) {
+      console.error('Save error:', error)
+      alert('Грешка при запазване на настройките')
+    } finally {
+      setSaving(false)
+    }
+  }
 
   return (
     <div className="max-w-2xl space-y-6">
@@ -130,9 +147,19 @@ export default function SettingsPage() {
       </div>
 
       {/* Save Button */}
-      <button className="w-full bg-blue-600 text-white py-3 px-4 rounded-lg font-medium hover:bg-blue-700 focus:ring-4 focus:ring-blue-200 transition flex items-center justify-center gap-2">
-        <Save className="w-5 h-5" />
-        Запази настройките
+      <button
+        onClick={handleSave}
+        disabled={saving}
+        className="w-full bg-blue-600 text-white py-3 px-4 rounded-lg font-medium hover:bg-blue-700 focus:ring-4 focus:ring-blue-200 transition flex items-center justify-center gap-2 disabled:opacity-50"
+      >
+        {saving ? (
+          <Loader2 className="w-5 h-5 animate-spin" />
+        ) : saved ? (
+          <Check className="w-5 h-5" />
+        ) : (
+          <Save className="w-5 h-5" />
+        )}
+        {saving ? 'Запазване...' : saved ? 'Запазено!' : 'Запази настройките'}
       </button>
     </div>
   )

@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { Calendar, Search, Filter, ChevronDown, Loader2, Plus, Clock, User } from 'lucide-react'
+import { Calendar, Search, Filter, ChevronDown, Loader2, Plus, Clock, User, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 interface Appointment {
@@ -13,6 +13,8 @@ interface Appointment {
   type: string | null
   notes: string | null
   price: number | null
+  doctor_id: string | null
+  patient_id: string | null
   doctor: {
     id: string
     name: string
@@ -24,6 +26,19 @@ interface Appointment {
     name: string
     phone: string
   } | null
+}
+
+interface Doctor {
+  id: string
+  name: string
+  specialty: string | null
+  color: string
+}
+
+interface Patient {
+  id: string
+  name: string
+  phone: string
 }
 
 const statusColors: Record<string, string> = {
@@ -42,20 +57,40 @@ const statusLabels: Record<string, string> = {
   cancelled: 'Отменен'
 }
 
+const initialFormData = {
+  appointment_date: new Date().toISOString().split('T')[0],
+  start_time: '09:00',
+  end_time: '09:30',
+  doctor_id: '',
+  patient_id: '',
+  type: '',
+  notes: '',
+  price: '',
+  status: 'scheduled'
+}
+
 export default function AppointmentsPage() {
   const [appointments, setAppointments] = useState<Appointment[]>([])
+  const [doctors, setDoctors] = useState<Doctor[]>([])
+  const [patients, setPatients] = useState<Patient[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [searchQuery, setSearchQuery] = useState('')
   const [statusFilter, setStatusFilter] = useState<string>('')
   const [dateFilter, setDateFilter] = useState<string>('')
   const [showStatusDropdown, setShowStatusDropdown] = useState(false)
+  const [showModal, setShowModal] = useState(false)
+  const [editingAppointment, setEditingAppointment] = useState<Appointment | null>(null)
+  const [formData, setFormData] = useState(initialFormData)
+  const [saving, setSaving] = useState(false)
 
   useEffect(() => {
     fetchAppointments()
+    fetchDoctors()
+    fetchPatients()
   }, [statusFilter, dateFilter])
 
-  const fetchAppointments = async () => {
+  async function fetchAppointments() {
     try {
       setLoading(true)
       const params = new URLSearchParams()
@@ -80,6 +115,30 @@ export default function AppointmentsPage() {
       setError('Грешка при зареждане на часове')
     } finally {
       setLoading(false)
+    }
+  }
+
+  async function fetchDoctors() {
+    try {
+      const response = await fetch('/api/doctors')
+      const data = await response.json()
+      if (data.doctors) {
+        setDoctors(data.doctors)
+      }
+    } catch (err) {
+      console.error('Error fetching doctors:', err)
+    }
+  }
+
+  async function fetchPatients() {
+    try {
+      const response = await fetch('/api/patients')
+      const data = await response.json()
+      if (data.patients) {
+        setPatients(data.patients)
+      }
+    } catch (err) {
+      console.error('Error fetching patients:', err)
     }
   }
 
@@ -141,7 +200,65 @@ export default function AppointmentsPage() {
     }
   }
 
-  if (loading) {
+  function openAddModal() {
+    setEditingAppointment(null)
+    setFormData(initialFormData)
+    setShowModal(true)
+  }
+
+  function openEditModal(appointment: Appointment) {
+    setEditingAppointment(appointment)
+    setFormData({
+      appointment_date: appointment.appointment_date,
+      start_time: appointment.start_time.slice(0, 5),
+      end_time: appointment.end_time.slice(0, 5),
+      doctor_id: appointment.doctor_id || '',
+      patient_id: appointment.patient_id || '',
+      type: appointment.type || '',
+      notes: appointment.notes || '',
+      price: appointment.price?.toString() || '',
+      status: appointment.status
+    })
+    setShowModal(true)
+  }
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault()
+    setSaving(true)
+
+    try {
+      const url = editingAppointment
+        ? `/api/appointments/${editingAppointment.id}`
+        : '/api/appointments'
+      const method = editingAppointment ? 'PUT' : 'POST'
+
+      const response = await fetch(url, {
+        method,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ...formData,
+          price: formData.price ? parseFloat(formData.price) : null
+        })
+      })
+
+      if (response.ok) {
+        setShowModal(false)
+        setFormData(initialFormData)
+        setEditingAppointment(null)
+        fetchAppointments()
+      } else {
+        const data = await response.json()
+        alert(data.error || 'Грешка при запазване')
+      }
+    } catch (error) {
+      console.error('Save error:', error)
+      alert('Грешка при запазване')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  if (loading && appointments.length === 0) {
     return (
       <div className="flex items-center justify-center h-64">
         <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
@@ -216,7 +333,10 @@ export default function AppointmentsPage() {
           </div>
 
           {/* Add Button */}
-          <button className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition">
+          <button
+            onClick={openAddModal}
+            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
+          >
             <Plus className="w-5 h-5" />
             <span>Нов час</span>
           </button>
@@ -332,7 +452,10 @@ export default function AppointmentsPage() {
                                 </button>
                               </>
                             )}
-                            <button className="px-2 py-1 text-xs text-blue-600 hover:bg-blue-50 rounded">
+                            <button
+                              onClick={() => openEditModal(appointment)}
+                              className="px-2 py-1 text-xs text-blue-600 hover:bg-blue-50 rounded"
+                            >
                               Редактирай
                             </button>
                           </div>
@@ -349,6 +472,173 @@ export default function AppointmentsPage() {
         <div className="text-center py-12 bg-white rounded-xl border border-gray-100">
           <Calendar className="w-12 h-12 text-gray-300 mx-auto mb-4" />
           <p className="text-gray-500">Няма намерени часове</p>
+        </div>
+      )}
+
+      {/* Add/Edit Modal */}
+      {showModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl p-6 w-full max-w-md mx-4 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg font-semibold text-gray-900">
+                {editingAppointment ? 'Редактирай час' : 'Нов час'}
+              </h2>
+              <button onClick={() => setShowModal(false)} className="p-2 hover:bg-gray-100 rounded-lg">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSubmit} className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Дата *
+                  </label>
+                  <input
+                    type="date"
+                    value={formData.appointment_date}
+                    onChange={(e) => setFormData({ ...formData, appointment_date: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Статус
+                  </label>
+                  <select
+                    value={formData.status}
+                    onChange={(e) => setFormData({ ...formData, status: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  >
+                    {Object.entries(statusLabels).map(([key, label]) => (
+                      <option key={key} value={key}>{label}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Начало *
+                  </label>
+                  <input
+                    type="time"
+                    value={formData.start_time}
+                    onChange={(e) => setFormData({ ...formData, start_time: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Край *
+                  </label>
+                  <input
+                    type="time"
+                    value={formData.end_time}
+                    onChange={(e) => setFormData({ ...formData, end_time: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    required
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Лекар *
+                </label>
+                <select
+                  value={formData.doctor_id}
+                  onChange={(e) => setFormData({ ...formData, doctor_id: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  required
+                >
+                  <option value="">Изберете лекар...</option>
+                  {doctors.map((doctor) => (
+                    <option key={doctor.id} value={doctor.id}>{doctor.name}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Пациент *
+                </label>
+                <select
+                  value={formData.patient_id}
+                  onChange={(e) => setFormData({ ...formData, patient_id: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  required
+                >
+                  <option value="">Изберете пациент...</option>
+                  {patients.map((patient) => (
+                    <option key={patient.id} value={patient.id}>
+                      {patient.name} ({formatPhone(patient.phone)})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Тип на часа
+                </label>
+                <input
+                  type="text"
+                  value={formData.type}
+                  onChange={(e) => setFormData({ ...formData, type: e.target.value })}
+                  placeholder="напр. Преглед, Почистване, Пломба..."
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Цена (лв)
+                </label>
+                <input
+                  type="number"
+                  step="0.01"
+                  value={formData.price}
+                  onChange={(e) => setFormData({ ...formData, price: e.target.value })}
+                  placeholder="0.00"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Бележки
+                </label>
+                <textarea
+                  value={formData.notes}
+                  onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+                  rows={3}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+              </div>
+
+              <div className="flex gap-3 pt-4">
+                <button
+                  type="button"
+                  onClick={() => setShowModal(false)}
+                  className="flex-1 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
+                >
+                  Отказ
+                </button>
+                <button
+                  type="submit"
+                  disabled={saving}
+                  className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 flex items-center justify-center gap-2"
+                >
+                  {saving && <Loader2 className="w-4 h-4 animate-spin" />}
+                  {saving ? 'Запазване...' : editingAppointment ? 'Запази' : 'Създай'}
+                </button>
+              </div>
+            </form>
+          </div>
         </div>
       )}
     </div>
