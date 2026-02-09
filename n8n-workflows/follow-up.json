@@ -1,0 +1,197 @@
+{
+  "name": "Dental - Follow-up след час",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "hours",
+              "hour": 19
+            }
+          ]
+        }
+      },
+      "id": "schedule-trigger",
+      "name": "Every Day at 19:00",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        250,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT \n  a.id,\n  a.appointment_date,\n  a.start_time,\n  a.type,\n  p.name as patient_name,\n  p.phone as patient_phone,\n  d.name as doctor_name\nFROM appointments a\nJOIN patients p ON a.patient_id = p.id\nJOIN doctors d ON a.doctor_id = d.id\nWHERE a.status = 'completed'\n  AND a.appointment_date = CURRENT_DATE\n  AND NOT EXISTS (\n    SELECT 1 FROM reminders r \n    WHERE r.appointment_id = a.id \n    AND r.type = 'followup'\n    AND r.status = 'sent'\n  )\nORDER BY a.start_time",
+        "options": {}
+      },
+      "id": "postgres-get-completed",
+      "name": "Get Today Completed",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        500,
+        300
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "J0l6WbgMA2qgQdnq",
+          "name": "Postgres account 3"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "check-has-items",
+              "leftValue": "={{ $json }}",
+              "rightValue": "",
+              "operator": {
+                "type": "object",
+                "operation": "notEmpty"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "if-has-completed",
+      "name": "Has Completed?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        750,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "message",
+        "operation": "sendText",
+        "instanceName": "default",
+        "remoteJid": "={{ $json.patient_phone }}@s.whatsapp.net",
+        "message": "🦷 *Благодарим за посещението!*\n\nЗдравей, {{ $json.patient_name }}!\n\nНадяваме се, че си доволен/а от днешното посещение при {{ $json.doctor_name }}.\n\n💬 Ако имаш въпроси или притеснения, не се колебай да ни пишеш.\n\n⭐ Ще се радваме на твоя отзив!\n\nДо скоро!\n_Dental Dashboard_",
+        "options": {}
+      },
+      "id": "send-whatsapp",
+      "name": "Send Follow-up",
+      "type": "n8n-nodes-evolution-api-english.evolutionApi",
+      "typeVersion": 1,
+      "position": [
+        1000,
+        200
+      ],
+      "credentials": {
+        "evolutionApi": {
+          "id": "XQSyFEVuFnjkHYYS",
+          "name": "Evolution account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO reminders (appointment_id, type, status, sent_at, scheduled_for)\nVALUES ('{{ $json.id }}', 'followup', 'sent', NOW(), NOW())\nON CONFLICT (appointment_id, type) \nDO UPDATE SET status = 'sent', sent_at = NOW()",
+        "options": {}
+      },
+      "id": "postgres-log-followup",
+      "name": "Log Follow-up Sent",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        1250,
+        200
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "J0l6WbgMA2qgQdnq",
+          "name": "Postgres account 3"
+        }
+      }
+    },
+    {
+      "parameters": {},
+      "id": "no-op",
+      "name": "No Completed",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        1000,
+        400
+      ]
+    }
+  ],
+  "connections": {
+    "Every Day at 19:00": {
+      "main": [
+        [
+          {
+            "node": "Get Today Completed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Today Completed": {
+      "main": [
+        [
+          {
+            "node": "Has Completed?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has Completed?": {
+      "main": [
+        [
+          {
+            "node": "Send Follow-up",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "No Completed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Follow-up": {
+      "main": [
+        [
+          {
+            "node": "Log Follow-up Sent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "Europe/Sofia"
+  },
+  "staticData": null,
+  "tags": [
+    "dental",
+    "followup",
+    "whatsapp"
+  ]
+}

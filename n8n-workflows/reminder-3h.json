@@ -1,0 +1,197 @@
+{
+  "name": "Dental - Напомняне 3 часа",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 15
+            }
+          ]
+        }
+      },
+      "id": "schedule-trigger",
+      "name": "Every 15 Minutes",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        250,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT \n  a.id,\n  a.appointment_date,\n  a.start_time,\n  a.type,\n  p.name as patient_name,\n  p.phone as patient_phone,\n  d.name as doctor_name\nFROM appointments a\nJOIN patients p ON a.patient_id = p.id\nJOIN doctors d ON a.doctor_id = d.id\nWHERE a.status IN ('scheduled', 'confirmed')\n  AND a.appointment_date = CURRENT_DATE\n  AND a.start_time BETWEEN \n    (CURRENT_TIME + INTERVAL '2 hours 45 minutes') \n    AND (CURRENT_TIME + INTERVAL '3 hours 15 minutes')\n  AND NOT EXISTS (\n    SELECT 1 FROM reminders r \n    WHERE r.appointment_id = a.id \n    AND r.type = '3h'\n    AND r.status = 'sent'\n  )\nORDER BY a.start_time",
+        "options": {}
+      },
+      "id": "postgres-get-appointments",
+      "name": "Get Upcoming Appointments",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        500,
+        300
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "J0l6WbgMA2qgQdnq",
+          "name": "Postgres account 3"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "check-has-items",
+              "leftValue": "={{ $json }}",
+              "rightValue": "",
+              "operator": {
+                "type": "object",
+                "operation": "notEmpty"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "if-has-appointments",
+      "name": "Has Appointments?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        750,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "message",
+        "operation": "sendText",
+        "instanceName": "default",
+        "remoteJid": "={{ $json.patient_phone }}@s.whatsapp.net",
+        "message": "⏰ *Напомняне - след 3 часа!*\n\nЗдравей, {{ $json.patient_name }}!\n\nИмаш час *днес* в {{ $json.start_time.substring(0,5) }} ч.\n\n👨‍⚕️ Лекар: {{ $json.doctor_name }}\n📋 Процедура: {{ $json.type || 'Преглед' }}\n\n📍 Моля, ела 10 минути по-рано.\n\n_Dental Dashboard_",
+        "options": {}
+      },
+      "id": "send-whatsapp",
+      "name": "Send WhatsApp Reminder",
+      "type": "n8n-nodes-evolution-api-english.evolutionApi",
+      "typeVersion": 1,
+      "position": [
+        1000,
+        200
+      ],
+      "credentials": {
+        "evolutionApi": {
+          "id": "XQSyFEVuFnjkHYYS",
+          "name": "Evolution account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO reminders (appointment_id, type, status, sent_at, scheduled_for)\nVALUES ('{{ $json.id }}', '3h', 'sent', NOW(), NOW())\nON CONFLICT (appointment_id, type) \nDO UPDATE SET status = 'sent', sent_at = NOW()",
+        "options": {}
+      },
+      "id": "postgres-log-reminder",
+      "name": "Log Reminder Sent",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        1250,
+        200
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "J0l6WbgMA2qgQdnq",
+          "name": "Postgres account 3"
+        }
+      }
+    },
+    {
+      "parameters": {},
+      "id": "no-op",
+      "name": "No Appointments",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        1000,
+        400
+      ]
+    }
+  ],
+  "connections": {
+    "Every 15 Minutes": {
+      "main": [
+        [
+          {
+            "node": "Get Upcoming Appointments",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Upcoming Appointments": {
+      "main": [
+        [
+          {
+            "node": "Has Appointments?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has Appointments?": {
+      "main": [
+        [
+          {
+            "node": "Send WhatsApp Reminder",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "No Appointments",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send WhatsApp Reminder": {
+      "main": [
+        [
+          {
+            "node": "Log Reminder Sent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "Europe/Sofia"
+  },
+  "staticData": null,
+  "tags": [
+    "dental",
+    "reminders",
+    "whatsapp"
+  ]
+}

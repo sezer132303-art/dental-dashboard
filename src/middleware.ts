@@ -1,0 +1,69 @@
+import { NextResponse } from 'next/server'
+import type { NextRequest } from 'next/server'
+
+// Routes that don't require authentication
+const publicRoutes = ['/login', '/auth/verify']
+
+export function middleware(request: NextRequest) {
+  const { pathname } = request.nextUrl
+  const session = request.cookies.get('session')
+
+  // Allow public routes
+  if (publicRoutes.some(route => pathname.startsWith(route))) {
+    // If user is already authenticated, redirect to dashboard
+    if (session) {
+      return NextResponse.redirect(new URL('/', request.url))
+    }
+    return NextResponse.next()
+  }
+
+  // Check authentication for protected routes
+  if (!session) {
+    const loginUrl = new URL('/login', request.url)
+    return NextResponse.redirect(loginUrl)
+  }
+
+  // Parse session and check expiry
+  try {
+    const sessionData = JSON.parse(session.value)
+    if (new Date(sessionData.expires) < new Date()) {
+      // Session expired, redirect to login
+      const response = NextResponse.redirect(new URL('/login', request.url))
+      response.cookies.delete('session')
+      return response
+    }
+  } catch {
+    // Invalid session, redirect to login
+    const response = NextResponse.redirect(new URL('/login', request.url))
+    response.cookies.delete('session')
+    return response
+  }
+
+  // Check admin routes
+  if (pathname.startsWith('/admin')) {
+    try {
+      const sessionData = JSON.parse(session.value)
+      if (sessionData.role !== 'admin') {
+        return NextResponse.redirect(new URL('/', request.url))
+      }
+    } catch {
+      return NextResponse.redirect(new URL('/login', request.url))
+    }
+  }
+
+  return NextResponse.next()
+}
+
+export const config = {
+  matcher: [
+    /*
+     * Match all request paths except:
+     * - api (API routes)
+     * - _next/static (static files)
+     * - _next/image (image optimization files)
+     * - favicon.ico (favicon file)
+     * - public files (public folder)
+     */
+    '/((?!api|_next/static|_next/image|favicon.ico|.*\\..*).*)'
+  ]
+}

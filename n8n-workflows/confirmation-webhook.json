@@ -1,0 +1,333 @@
+{
+  "name": "Dental - Потвърждение от пациент",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "whatsapp-webhook",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-trigger",
+      "name": "WhatsApp Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        250,
+        300
+      ],
+      "webhookId": "whatsapp-confirmation-webhook"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": false,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "is-text-message",
+              "leftValue": "={{ $json.body.data.messageType }}",
+              "rightValue": "conversation",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "if-text-message",
+      "name": "Is Text Message?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        500,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const message = $input.first().json.body.data.message.conversation || '';\nconst phone = $input.first().json.body.data.key.remoteJid.replace('@s.whatsapp.net', '');\n\nconst upperMsg = message.toUpperCase().trim();\n\nlet action = 'unknown';\nif (upperMsg === 'ДА' || upperMsg === 'YES' || upperMsg === 'ПОТВЪРЖДАВАМ') {\n  action = 'confirm';\n} else if (upperMsg === 'НЕ' || upperMsg === 'NO' || upperMsg === 'ОТКАЗВАМ') {\n  action = 'cancel';\n}\n\nreturn {\n  phone,\n  message,\n  action\n};"
+      },
+      "id": "code-parse-message",
+      "name": "Parse Message",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        750,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "is-confirm",
+              "leftValue": "={{ $json.action }}",
+              "rightValue": "confirm",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "switch-action",
+      "name": "Action Type",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        1000,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE appointments \nSET status = 'confirmed', updated_at = NOW()\nWHERE id = (\n  SELECT a.id \n  FROM appointments a\n  JOIN patients p ON a.patient_id = p.id\n  WHERE p.phone = '{{ $json.phone }}'\n    AND a.status = 'scheduled'\n    AND a.appointment_date >= CURRENT_DATE\n  ORDER BY a.appointment_date, a.start_time\n  LIMIT 1\n)\nRETURNING id, appointment_date, start_time",
+        "options": {}
+      },
+      "id": "postgres-confirm",
+      "name": "Confirm Appointment",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        1250,
+        100
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "J0l6WbgMA2qgQdnq",
+          "name": "Postgres account 3"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE appointments \nSET status = 'cancelled', updated_at = NOW()\nWHERE id = (\n  SELECT a.id \n  FROM appointments a\n  JOIN patients p ON a.patient_id = p.id\n  WHERE p.phone = '{{ $('Parse Message').item.json.phone }}'\n    AND a.status IN ('scheduled', 'confirmed')\n    AND a.appointment_date >= CURRENT_DATE\n  ORDER BY a.appointment_date, a.start_time\n  LIMIT 1\n)\nRETURNING id, appointment_date, start_time",
+        "options": {}
+      },
+      "id": "postgres-cancel",
+      "name": "Cancel Appointment",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        1250,
+        300
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "J0l6WbgMA2qgQdnq",
+          "name": "Postgres account 3"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "message",
+        "operation": "sendText",
+        "instanceName": "default",
+        "remoteJid": "={{ $('Parse Message').item.json.phone }}@s.whatsapp.net",
+        "message": "✅ *Часът е потвърден!*\n\nБлагодарим, че потвърди!\n\nОчакваме те на {{ $json.appointment_date }} в {{ $json.start_time.substring(0,5) }} ч.\n\n_Dental Dashboard_",
+        "options": {}
+      },
+      "id": "send-confirm-reply",
+      "name": "Send Confirm Reply",
+      "type": "n8n-nodes-evolution-api-english.evolutionApi",
+      "typeVersion": 1,
+      "position": [
+        1500,
+        100
+      ],
+      "credentials": {
+        "evolutionApi": {
+          "id": "XQSyFEVuFnjkHYYS",
+          "name": "Evolution account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "message",
+        "operation": "sendText",
+        "instanceName": "default",
+        "remoteJid": "={{ $('Parse Message').item.json.phone }}@s.whatsapp.net",
+        "message": "❌ *Часът е отменен*\n\nЧасът ти е отменен успешно.\n\nАко искаш да запазиш нов час, моля свържи се с нас.\n\n_Dental Dashboard_",
+        "options": {}
+      },
+      "id": "send-cancel-reply",
+      "name": "Send Cancel Reply",
+      "type": "n8n-nodes-evolution-api-english.evolutionApi",
+      "typeVersion": 1,
+      "position": [
+        1500,
+        300
+      ],
+      "credentials": {
+        "evolutionApi": {
+          "id": "XQSyFEVuFnjkHYYS",
+          "name": "Evolution account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ success: true }) }}",
+        "options": {}
+      },
+      "id": "response-success",
+      "name": "Response OK",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        1750,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ success: true, ignored: true }) }}",
+        "options": {}
+      },
+      "id": "response-ignored",
+      "name": "Response Ignored",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        750,
+        450
+      ]
+    }
+  ],
+  "connections": {
+    "WhatsApp Webhook": {
+      "main": [
+        [
+          {
+            "node": "Is Text Message?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Text Message?": {
+      "main": [
+        [
+          {
+            "node": "Parse Message",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Response Ignored",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Message": {
+      "main": [
+        [
+          {
+            "node": "Action Type",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Action Type": {
+      "main": [
+        [
+          {
+            "node": "Confirm Appointment",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Cancel Appointment",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Confirm Appointment": {
+      "main": [
+        [
+          {
+            "node": "Send Confirm Reply",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Cancel Appointment": {
+      "main": [
+        [
+          {
+            "node": "Send Cancel Reply",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Confirm Reply": {
+      "main": [
+        [
+          {
+            "node": "Response OK",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Cancel Reply": {
+      "main": [
+        [
+          {
+            "node": "Response OK",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "Europe/Sofia"
+  },
+  "staticData": null,
+  "tags": [
+    "dental",
+    "whatsapp",
+    "confirmation"
+  ]
+}

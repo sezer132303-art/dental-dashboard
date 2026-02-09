@@ -1,0 +1,95 @@
+{
+  "name": "Dashboard - Magic Link",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "send-magic-link",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-trigger",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [250, 300],
+      "webhookId": "magic-link-webhook"
+    },
+    {
+      "parameters": {
+        "resource": "message",
+        "operation": "sendText",
+        "instanceName": "default",
+        "remoteJid": "={{ $json.body.phone }}@s.whatsapp.net",
+        "message": "🔐 *Dental Dashboard - Вход*\n\nЗдравей{{ $json.body.userName ? ' ' + $json.body.userName : '' }}!\n\nКликни линка за да влезеш в системата:\n{{ $json.body.magicLink }}\n\n⏰ Линкът е валиден 15 минути.\n\n_Ако не си поискал този линк, игнорирай съобщението._",
+        "options": {}
+      },
+      "id": "evolution-send",
+      "name": "Send WhatsApp",
+      "type": "@devlikeapro/n8n-nodes-evolution-api.evolutionApi",
+      "typeVersion": 1,
+      "position": [500, 300],
+      "credentials": {
+        "evolutionApi": {
+          "id": "REPLACE_WITH_CREDENTIAL_ID",
+          "name": "Evolution account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ success: true, message: 'Magic link sent' }) }}",
+        "options": {}
+      },
+      "id": "response-success",
+      "name": "Response Success",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [750, 250]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ success: false, error: $json.error || 'Failed to send' }) }}",
+        "options": {
+          "responseCode": 500
+        }
+      },
+      "id": "response-error",
+      "name": "Response Error",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [750, 400]
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Send WhatsApp",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send WhatsApp": {
+      "main": [
+        [
+          {
+            "node": "Response Success",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": ["dashboard", "auth"]
+}

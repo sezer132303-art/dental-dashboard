@@ -1,0 +1,62 @@
+{
+  "name": "Dashboard - Magic Link",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "send-magic-link",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-trigger",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [250, 300],
+      "webhookId": "magic-link-webhook"
+    },
+    {
+      "parameters": {
+        "resource": "messages-api",
+        "instanceName": "settbg",
+        "remoteJid": "={{ $json.body.phone }}",
+        "messageText": "={{ '🔐 *Dental Dashboard - Вход*\\n\\nЗдравей' + ($json.body.userName ? ' ' + $json.body.userName : '') + '!\\n\\nКликни линка за да влезеш:\\n' + $json.body.magicLink + '\\n\\n⏰ Линкът е валиден 15 минути.' }}",
+        "options_message": {}
+      },
+      "id": "evolution-send",
+      "name": "Send WhatsApp",
+      "type": "n8n-nodes-evolution-api-english.evolutionApi",
+      "typeVersion": 1,
+      "position": [500, 300],
+      "credentials": {
+        "evolutionApi": {
+          "id": "XQSyFEVuFnjkHYYS",
+          "name": "Evolution account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ success: true, message: 'Magic link sent' }) }}",
+        "options": {}
+      },
+      "id": "response-success",
+      "name": "Response Success",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [750, 300]
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [[{"node": "Send WhatsApp", "type": "main", "index": 0}]]
+    },
+    "Send WhatsApp": {
+      "main": [[{"node": "Response Success", "type": "main", "index": 0}]]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}
