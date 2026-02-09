@@ -10,9 +10,13 @@ export function middleware(request: NextRequest) {
 
   // Allow public routes
   if (publicRoutes.some(route => pathname.startsWith(route))) {
-    // Reset password should always be accessible (even with session)
+    // Reset password and forgot password should ALWAYS be accessible (even with active session)
+    // This is critical for password reset flow to work correctly
     if (pathname.startsWith('/auth/reset-password') || pathname.startsWith('/auth/forgot-password')) {
-      return NextResponse.next()
+      const response = NextResponse.next()
+      // Prevent caching of these pages
+      response.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate')
+      return response
     }
 
     // If user is already authenticated, redirect to appropriate dashboard
