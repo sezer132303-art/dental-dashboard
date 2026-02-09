@@ -26,19 +26,65 @@ export async function POST(request: Request) {
     // Check if user already exists
     const { data: existingUser } = await supabase
       .from('users')
-      .select('id')
+      .select('id, is_active, clinic_id')
       .eq('phone', normalizedPhone)
       .single()
 
-    if (existingUser) {
-      return NextResponse.json(
-        { error: 'Потребител с този телефон вече съществува' },
-        { status: 400 }
-      )
-    }
-
     // Hash password
     const passwordHash = await bcrypt.hash(password, 10)
+
+    // If user exists
+    if (existingUser) {
+      // Check if the user is active with an active clinic
+      if (existingUser.is_active && existingUser.clinic_id) {
+        // Check if their clinic still exists and is active
+        const { data: clinic } = await supabase
+          .from('clinics')
+          .select('id, is_active')
+          .eq('id', existingUser.clinic_id)
+          .single()
+
+        if (clinic && clinic.is_active) {
+          return NextResponse.json(
+            { error: 'Потребител с този телефон вече съществува' },
+            { status: 400 }
+          )
+        }
+      }
+
+      // User exists but their clinic is deleted/inactive - update the user
+      const { data: updatedUser, error: updateError } = await supabase
+        .from('users')
+        .update({
+          name,
+          email: email || null,
+          password_hash: passwordHash,
+          role: 'clinic',
+          clinic_id: clinicId,
+          is_active: true
+        })
+        .eq('id', existingUser.id)
+        .select()
+        .single()
+
+      if (updateError) {
+        console.error('Update user error:', updateError)
+        return NextResponse.json(
+          { error: 'Грешка при обновяване на потребител: ' + updateError.message },
+          { status: 500 }
+        )
+      }
+
+      return NextResponse.json({
+        success: true,
+        user: {
+          id: updatedUser.id,
+          name: updatedUser.name,
+          phone: updatedUser.phone,
+          role: updatedUser.role
+        }
+      })
+    }
 
     // Create user with 'clinic' role
     const { data: user, error } = await supabase
