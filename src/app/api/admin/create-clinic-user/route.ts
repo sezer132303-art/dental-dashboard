@@ -47,7 +47,7 @@ export async function POST(request: Request) {
         clinicExists = !!clinic
       }
 
-      // If user has an active clinic, don't allow
+      // If user has an active clinic that exists, don't allow
       if (existingUser.is_active && clinicExists) {
         return NextResponse.json(
           { error: 'Потребител с този телефон вече съществува' },
@@ -55,38 +55,19 @@ export async function POST(request: Request) {
         )
       }
 
-      // User exists but their clinic is deleted - update the user for the new clinic
-      const { data: updatedUser, error: updateError } = await supabase
+      // User exists but their clinic is deleted/null - delete the old user first
+      const { error: deleteError } = await supabase
         .from('users')
-        .update({
-          name,
-          email: email || null,
-          password_hash: passwordHash,
-          role: 'clinic',
-          clinic_id: clinicId,
-          is_active: true
-        })
+        .delete()
         .eq('id', existingUser.id)
-        .select()
-        .single()
 
-      if (updateError) {
-        console.error('Update user error:', updateError)
+      if (deleteError) {
+        console.error('Delete old user error:', deleteError)
         return NextResponse.json(
-          { error: 'Грешка при обновяване на потребител: ' + updateError.message },
+          { error: 'Грешка при изтриване на стар потребител: ' + deleteError.message },
           { status: 500 }
         )
       }
-
-      return NextResponse.json({
-        success: true,
-        user: {
-          id: updatedUser.id,
-          name: updatedUser.name,
-          phone: updatedUser.phone,
-          role: updatedUser.role
-        }
-      })
     }
 
     // Create user with 'clinic' role
