@@ -2,7 +2,8 @@ import { NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase'
 
 const N8N_WEBHOOK_URL = process.env.N8N_WEBHOOK_URL || 'https://mwqopo2p.rpcld.net/webhook'
-const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
+// Production URL hardcoded as fallback to ensure links always work
+const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://dental-dashboard-nu.vercel.app'
 
 // Normalize phone number to international format (359XXXXXXXXX)
 function normalizePhone(phone: string): string {
@@ -68,6 +69,8 @@ export async function POST(request: Request) {
 
     // Send WhatsApp message via n8n webhook
     const resetLink = `${APP_URL}/auth/reset-password?token=${token}`
+    console.log('APP_URL:', APP_URL)
+    console.log('Reset link:', resetLink)
 
     // Normalize phone for WhatsApp (must be international format without +)
     const whatsappPhone = normalizePhone(user.phone)
