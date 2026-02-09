@@ -28,31 +28,34 @@ export async function POST(request: Request) {
       .from('users')
       .select('id, is_active, clinic_id')
       .eq('phone', normalizedPhone)
-      .single()
+      .maybeSingle()
 
     // Hash password
     const passwordHash = await bcrypt.hash(password, 10)
 
     // If user exists
     if (existingUser) {
-      // Check if the user is active with an active clinic
-      if (existingUser.is_active && existingUser.clinic_id) {
-        // Check if their clinic still exists and is active
+      // Check if their clinic still exists
+      let clinicExists = false
+      if (existingUser.clinic_id) {
         const { data: clinic } = await supabase
           .from('clinics')
-          .select('id, is_active')
+          .select('id')
           .eq('id', existingUser.clinic_id)
-          .single()
+          .maybeSingle()
 
-        if (clinic && clinic.is_active) {
-          return NextResponse.json(
-            { error: 'Потребител с този телефон вече съществува' },
-            { status: 400 }
-          )
-        }
+        clinicExists = !!clinic
       }
 
-      // User exists but their clinic is deleted/inactive - update the user
+      // If user has an active clinic, don't allow
+      if (existingUser.is_active && clinicExists) {
+        return NextResponse.json(
+          { error: 'Потребител с този телефон вече съществува' },
+          { status: 400 }
+        )
+      }
+
+      // User exists but their clinic is deleted - update the user for the new clinic
       const { data: updatedUser, error: updateError } = await supabase
         .from('users')
         .update({
