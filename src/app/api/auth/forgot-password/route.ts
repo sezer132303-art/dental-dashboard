@@ -69,9 +69,18 @@ export async function POST(request: Request) {
     }
 
     // Send WhatsApp message via n8n webhook
+    // Construct URL carefully - no spaces allowed
     const resetLink = `${APP_URL}/auth/reset-password?token=${token}`
-    console.log('APP_URL:', APP_URL)
-    console.log('Reset link:', resetLink)
+
+    // Validate URL has no spaces
+    if (resetLink.includes(' ')) {
+      console.error('ERROR: Reset link contains spaces!', JSON.stringify(resetLink))
+    }
+
+    console.log('APP_URL:', JSON.stringify(APP_URL))
+    console.log('APP_URL length:', APP_URL.length)
+    console.log('Reset link:', JSON.stringify(resetLink))
+    console.log('Reset link length:', resetLink.length)
 
     // Normalize phone for WhatsApp (must be international format without +)
     const whatsappPhone = normalizePhone(user.phone)
