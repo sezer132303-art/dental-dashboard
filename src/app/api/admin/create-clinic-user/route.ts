@@ -35,27 +35,16 @@ export async function POST(request: Request) {
 
     // If user exists
     if (existingUser) {
-      // Check if their clinic still exists
-      let clinicExists = false
-      if (existingUser.clinic_id) {
-        const { data: clinic } = await supabase
-          .from('clinics')
-          .select('id')
-          .eq('id', existingUser.clinic_id)
-          .maybeSingle()
-
-        clinicExists = !!clinic
-      }
-
-      // If user has an active clinic that exists, don't allow
-      if (existingUser.is_active && clinicExists) {
+      // Check if this user belongs to the SAME clinic we're creating for
+      // If they belong to a DIFFERENT clinic (or clinic is NULL/deleted), allow reuse
+      if (existingUser.clinic_id === clinicId && existingUser.is_active) {
         return NextResponse.json(
-          { error: 'Потребител с този телефон вече съществува' },
+          { error: 'Потребител с този телефон вече съществува в тази клиника' },
           { status: 400 }
         )
       }
 
-      // User exists but their clinic is deleted/null - delete the old user first
+      // User exists for a different/deleted clinic - delete the old user first
       const { error: deleteError } = await supabase
         .from('users')
         .delete()
