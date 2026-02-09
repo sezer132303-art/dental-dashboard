@@ -11,17 +11,21 @@ import {
   Menu,
   X,
   MessageCircle,
-  BarChart3,
+  CalendarDays,
+  Settings,
+  Stethoscope,
   Building2
 } from 'lucide-react'
 import { useState, useEffect } from 'react'
 
 const navigation = [
   { name: 'Табло', href: '/clinic', icon: LayoutDashboard },
+  { name: 'Лекари', href: '/clinic/doctors', icon: Stethoscope },
   { name: 'Часове', href: '/clinic/appointments', icon: Calendar },
   { name: 'Пациенти', href: '/clinic/patients', icon: Users },
-  { name: 'Разговори', href: '/clinic/conversations', icon: MessageCircle },
-  { name: 'Отчети', href: '/clinic/reports', icon: BarChart3 },
+  { name: 'WhatsApp', href: '/clinic/conversations', icon: MessageCircle },
+  { name: 'Календар', href: '/clinic/calendar', icon: CalendarDays },
+  { name: 'Настройки', href: '/clinic/settings', icon: Settings },
 ]
 
 interface ClinicUser {
