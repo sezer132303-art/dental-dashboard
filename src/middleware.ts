@@ -10,6 +10,11 @@ export function middleware(request: NextRequest) {
 
   // Allow public routes
   if (publicRoutes.some(route => pathname.startsWith(route))) {
+    // Reset password should always be accessible (even with session)
+    if (pathname.startsWith('/auth/reset-password') || pathname.startsWith('/auth/forgot-password')) {
+      return NextResponse.next()
+    }
+
     // If user is already authenticated, redirect to appropriate dashboard
     if (session) {
       try {
