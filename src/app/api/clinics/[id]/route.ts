@@ -50,6 +50,7 @@ export async function PATCH(
     if (body.whatsapp_api_key !== undefined) updateData.whatsapp_api_key = body.whatsapp_api_key
     if (body.evolution_api_url !== undefined) updateData.evolution_api_url = body.evolution_api_url
     if (body.google_calendar_id !== undefined) updateData.google_calendar_id = body.google_calendar_id
+    if (body.google_calendars !== undefined) updateData.google_calendars = body.google_calendars
     if (body.google_service_account !== undefined) updateData.google_service_account = body.google_service_account
 
     const supabase = createServerSupabaseClient()

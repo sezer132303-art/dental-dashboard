@@ -51,10 +51,11 @@ export default function DashboardLayout({
   async function handleLogout() {
     try {
       await fetch('/api/auth/logout', { method: 'POST' })
-      router.push('/login')
     } catch (error) {
       console.error('Logout error:', error)
-      router.push('/login')
+    } finally {
+      // Always redirect to login, even if logout API fails
+      window.location.href = '/login'
     }
   }
 

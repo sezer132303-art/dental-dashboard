@@ -18,7 +18,15 @@ export default function AdminClinicsPage() {
   const [searchQuery, setSearchQuery] = useState('')
   const [showModal, setShowModal] = useState(false)
   const [editingClinic, setEditingClinic] = useState<Clinic | null>(null)
-  const [formData, setFormData] = useState({ name: '', whatsapp_instance: '' })
+  const [formData, setFormData] = useState({
+    name: '',
+    address: '',
+    phone: '',
+    whatsapp_instance: '',
+    whatsapp_api_key: '',
+    evolution_api_url: 'https://evo.settbg.com',
+    google_calendars: ''
+  })
   const [saving, setSaving] = useState(false)
 
   useEffect(() => {
@@ -49,13 +57,56 @@ export default function AdminClinicsPage() {
 
   function openAddModal() {
     setEditingClinic(null)
-    setFormData({ name: '', whatsapp_instance: '' })
+    setFormData({
+      name: '',
+      address: '',
+      phone: '',
+      whatsapp_instance: '',
+      whatsapp_api_key: '',
+      evolution_api_url: 'https://evo.settbg.com',
+      google_calendars: ''
+    })
     setShowModal(true)
   }
 
-  function openEditModal(clinic: Clinic) {
+  async function openEditModal(clinic: Clinic) {
     setEditingClinic(clinic)
-    setFormData({ name: clinic.name, whatsapp_instance: clinic.whatsapp_instance || '' })
+    // Fetch full clinic details
+    try {
+      const response = await fetch(`/api/clinics/${clinic.id}`)
+      if (response.ok) {
+        const fullClinic = await response.json()
+        setFormData({
+          name: fullClinic.name || '',
+          address: fullClinic.address || '',
+          phone: fullClinic.phone || '',
+          whatsapp_instance: fullClinic.whatsapp_instance || '',
+          whatsapp_api_key: fullClinic.whatsapp_api_key || '',
+          evolution_api_url: fullClinic.evolution_api_url || 'https://evo.settbg.com',
+          google_calendars: fullClinic.google_calendars || ''
+        })
+      } else {
+        setFormData({
+          name: clinic.name,
+          address: '',
+          phone: '',
+          whatsapp_instance: clinic.whatsapp_instance || '',
+          whatsapp_api_key: '',
+          evolution_api_url: 'https://evo.settbg.com',
+          google_calendars: ''
+        })
+      }
+    } catch {
+      setFormData({
+        name: clinic.name,
+        address: '',
+        phone: '',
+        whatsapp_instance: clinic.whatsapp_instance || '',
+        whatsapp_api_key: '',
+        evolution_api_url: 'https://evo.settbg.com',
+        google_calendars: ''
+      })
+    }
     setShowModal(true)
   }
 
@@ -219,34 +270,114 @@ export default function AdminClinicsPage() {
               </button>
             </div>
 
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Име на клиниката
-                </label>
-                <input
-                  type="text"
-                  value={formData.name}
-                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-900"
-                  required
-                />
+            <form onSubmit={handleSubmit} className="space-y-4 max-h-[70vh] overflow-y-auto">
+              {/* Basic Info */}
+              <div className="space-y-4">
+                <h3 className="font-medium text-gray-900 border-b pb-2">Основна информация</h3>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Име на клиниката *
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.name}
+                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-900"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Адрес
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.address}
+                    onChange={(e) => setFormData({ ...formData, address: e.target.value })}
+                    placeholder="ул. Витоша 100, София"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-900"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Телефон
+                  </label>
+                  <input
+                    type="tel"
+                    value={formData.phone}
+                    onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                    placeholder="+359 2 123 4567"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-900"
+                  />
+                </div>
               </div>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  WhatsApp Instance
-                </label>
-                <input
-                  type="text"
-                  value={formData.whatsapp_instance}
-                  onChange={(e) => setFormData({ ...formData, whatsapp_instance: e.target.value })}
-                  placeholder="например: dental_sofia"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-900"
-                />
+              {/* WhatsApp */}
+              <div className="space-y-4">
+                <h3 className="font-medium text-gray-900 border-b pb-2">WhatsApp интеграция</h3>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Evolution API URL
+                  </label>
+                  <input
+                    type="url"
+                    value={formData.evolution_api_url}
+                    onChange={(e) => setFormData({ ...formData, evolution_api_url: e.target.value })}
+                    placeholder="https://evo.example.com"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-900"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Instance Name
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.whatsapp_instance}
+                    onChange={(e) => setFormData({ ...formData, whatsapp_instance: e.target.value })}
+                    placeholder="clinic_sofia"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-900"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    API Key
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.whatsapp_api_key}
+                    onChange={(e) => setFormData({ ...formData, whatsapp_api_key: e.target.value })}
+                    placeholder="your-api-key"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-900"
+                  />
+                </div>
               </div>
 
-              <div className="flex gap-3 pt-4">
+              {/* Google Calendar */}
+              <div className="space-y-4">
+                <h3 className="font-medium text-gray-900 border-b pb-2">Google Calendar</h3>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Calendar IDs (JSON формат)
+                  </label>
+                  <textarea
+                    value={formData.google_calendars}
+                    onChange={(e) => setFormData({ ...formData, google_calendars: e.target.value })}
+                    placeholder='[{"name": "Д-р Иванов", "calendarId": "abc@group.calendar.google.com"}]'
+                    rows={3}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-900 font-mono text-sm"
+                  />
+                  <p className="text-xs text-gray-500 mt-1">
+                    Синхронизацията се извършва чрез n8n
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex gap-3 pt-4 sticky bottom-0 bg-white">
                 <button
                   type="button"
                   onClick={() => setShowModal(false)}
