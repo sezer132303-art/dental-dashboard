@@ -374,7 +374,7 @@ export default function AppointmentsPage() {
         <div className="space-y-6">
           {Object.entries(groupedAppointments).map(([date, dateAppointments]) => (
             <div key={date}>
-              <h3 className="text-sm font-semibold text-gray-500 mb-3 flex items-center gap-2">
+              <h3 className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
                 <Calendar className="w-4 h-4" />
                 {formatDate(date)}
               </h3>
@@ -411,7 +411,7 @@ export default function AppointmentsPage() {
                               <p className="font-medium text-gray-900">
                                 {appointment.patient?.name || 'Неизвестен пациент'}
                               </p>
-                              <p className="text-sm text-gray-500">
+                              <p className="text-sm text-gray-700">
                                 {appointment.patient ? formatPhone(appointment.patient.phone) : '-'}
                               </p>
                             </div>
@@ -419,7 +419,7 @@ export default function AppointmentsPage() {
 
                           {/* Type */}
                           {appointment.type && (
-                            <span className="text-sm text-gray-500 hidden md:inline">
+                            <span className="text-sm text-gray-700 hidden md:inline">
                               {appointment.type}
                             </span>
                           )}

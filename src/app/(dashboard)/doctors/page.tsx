@@ -140,35 +140,35 @@ export default function DoctorsPage() {
                 </div>
                 <div className="flex-1">
                   <h3 className="text-lg font-semibold text-gray-900">{doctor.name}</h3>
-                  <p className="text-sm text-gray-500">{doctor.specialty || 'Общ стоматолог'}</p>
+                  <p className="text-sm text-gray-700">{doctor.specialty || 'Общ стоматолог'}</p>
                 </div>
               </div>
 
               <div className="mt-4 grid grid-cols-3 gap-4">
                 <div className="text-center p-3 bg-gray-50 rounded-lg">
                   <p className="text-2xl font-bold text-blue-600">{doctor.patientsThisWeek || 0}</p>
-                  <p className="text-xs text-gray-500">тази седмица</p>
+                  <p className="text-xs text-gray-700">тази седмица</p>
                 </div>
                 <div className="text-center p-3 bg-gray-50 rounded-lg">
                   <p className="text-2xl font-bold text-green-600">{doctor.completed || 0}</p>
-                  <p className="text-xs text-gray-500">завършени</p>
+                  <p className="text-xs text-gray-700">завършени</p>
                 </div>
                 <div className="text-center p-3 bg-gray-50 rounded-lg">
                   <p className="text-2xl font-bold text-red-600">{doctor.noShow || 0}</p>
-                  <p className="text-xs text-gray-500">неявявания</p>
+                  <p className="text-xs text-gray-700">неявявания</p>
                 </div>
               </div>
 
               <div className="mt-4 pt-4 border-t border-gray-100 space-y-2">
                 {doctor.phone && (
-                  <div className="flex items-center gap-2 text-sm text-gray-600">
-                    <Phone className="w-4 h-4" />
+                  <div className="flex items-center gap-2 text-sm text-gray-900">
+                    <Phone className="w-4 h-4 text-gray-500" />
                     <span>{doctor.phone}</span>
                   </div>
                 )}
                 {doctor.email && (
-                  <div className="flex items-center gap-2 text-sm text-gray-600">
-                    <Mail className="w-4 h-4" />
+                  <div className="flex items-center gap-2 text-sm text-gray-900">
+                    <Mail className="w-4 h-4 text-gray-500" />
                     <span>{doctor.email}</span>
                   </div>
                 )}

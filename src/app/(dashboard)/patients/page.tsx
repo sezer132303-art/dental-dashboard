@@ -190,13 +190,13 @@ export default function PatientsPage() {
               </div>
               <div className="flex-1 min-w-0">
                 <h3 className="font-semibold text-gray-900 truncate">{patient.name}</h3>
-                <div className="flex items-center gap-1 text-sm text-gray-500 mt-1">
-                  <Phone className="w-4 h-4" />
+                <div className="flex items-center gap-1 text-sm text-gray-900 mt-1">
+                  <Phone className="w-4 h-4 text-gray-500" />
                   {formatPhone(patient.phone)}
                 </div>
                 {patient.email && (
-                  <div className="flex items-center gap-1 text-sm text-gray-500 mt-1">
-                    <Mail className="w-4 h-4" />
+                  <div className="flex items-center gap-1 text-sm text-gray-900 mt-1">
+                    <Mail className="w-4 h-4 text-gray-500" />
                     <span className="truncate">{patient.email}</span>
                   </div>
                 )}
@@ -205,20 +205,20 @@ export default function PatientsPage() {
 
             <div className="mt-4 pt-4 border-t border-gray-100">
               <div className="flex items-center justify-between text-sm">
-                <span className="text-gray-500">Пол:</span>
-                <span className="font-medium text-gray-700">
+                <span className="text-gray-600">Пол:</span>
+                <span className="font-medium text-gray-900">
                   {patient.gender === 'male' ? 'Мъж' : patient.gender === 'female' ? 'Жена' : '-'}
                 </span>
               </div>
               {patient.date_of_birth && (
                 <div className="flex items-center justify-between text-sm mt-2">
-                  <span className="text-gray-500">Дата на раждане:</span>
-                  <span className="font-medium text-gray-700">{formatDate(patient.date_of_birth)}</span>
+                  <span className="text-gray-600">Дата на раждане:</span>
+                  <span className="font-medium text-gray-900">{formatDate(patient.date_of_birth)}</span>
                 </div>
               )}
             </div>
 
-            <div className="mt-4 flex items-center gap-1 text-xs text-gray-400">
+            <div className="mt-4 flex items-center gap-1 text-xs text-gray-600">
               <Calendar className="w-3 h-3" />
               Регистриран: {formatDate(patient.created_at)}
             </div>

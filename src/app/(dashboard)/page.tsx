@@ -78,7 +78,7 @@ function KpiCard({ title, value, change, icon: Icon, iconBg, suffix }: KpiCardPr
                 <TrendingDown className="w-4 h-4" />
               )}
               <span>{Math.abs(change)}%</span>
-              <span className="text-gray-400 font-normal">от миналата седмица</span>
+              <span className="text-gray-600 font-normal">от миналата седмица</span>
             </div>
           )}
         </div>
@@ -198,8 +198,8 @@ export default function DashboardPage() {
             <ResponsiveContainer width="100%" height={300}>
               <BarChart data={doctorChartData}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                <XAxis dataKey="name" stroke="#9ca3af" fontSize={12} />
-                <YAxis stroke="#9ca3af" fontSize={12} />
+                <XAxis dataKey="name" stroke="#374151" fontSize={12} />
+                <YAxis stroke="#374151" fontSize={12} />
                 <Tooltip
                   contentStyle={{
                     backgroundColor: 'white',
@@ -309,10 +309,10 @@ export default function DashboardPage() {
                         <span className="font-medium text-gray-900">{doctor.name}</span>
                       </div>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-gray-600">
+                    <td className="px-6 py-4 whitespace-nowrap text-gray-900">
                       {doctor.specialty || 'Общ стоматолог'}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-gray-600">
+                    <td className="px-6 py-4 whitespace-nowrap text-gray-900 font-medium">
                       {doctor.patientsThisWeek}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-green-600 font-medium">
