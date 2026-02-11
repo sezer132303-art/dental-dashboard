@@ -25,7 +25,7 @@ export async function GET() {
       id: clinic.id,
       name: clinic.name,
       whatsapp_instance: clinic.whatsapp_instance,
-      google_calendars: clinic.google_calendars,
+      google_calendar_id: clinic.google_calendar_id,
       created_at: clinic.created_at,
       doctors: clinic.doctors?.[0]?.count || 0,
       patients: clinic.patients?.[0]?.count || 0,
