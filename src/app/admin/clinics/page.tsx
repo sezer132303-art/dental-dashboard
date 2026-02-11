@@ -371,17 +371,17 @@ export default function AdminClinicsPage() {
                 <h3 className="font-medium text-gray-900 border-b pb-2">Google Calendar</h3>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Calendar ID
+                    Calendar IDs (по един на ред)
                   </label>
-                  <input
-                    type="text"
+                  <textarea
                     value={formData.google_calendar_id}
                     onChange={(e) => setFormData({ ...formData, google_calendar_id: e.target.value })}
-                    placeholder="abc123@group.calendar.google.com"
+                    placeholder="calendar1@group.calendar.google.com&#10;calendar2@gmail.com"
+                    rows={3}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-900"
                   />
                   <p className="text-xs text-gray-500 mt-1">
-                    Намери го в Google Calendar Settings
+                    Намери Calendar ID в Google Calendar → Settings → Integrate calendar
                   </p>
                 </div>
               </div>

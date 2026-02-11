@@ -61,7 +61,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// Prepare for Google Calendar API\nconst clinic = $input.first().json;\n\n// Get events from last 24 hours to next 30 days\nconst timeMin = new Date();\ntimeMin.setHours(timeMin.getHours() - 24);\n\nconst timeMax = new Date();\ntimeMax.setDate(timeMax.getDate() + 30);\n\nreturn [{\n  clinicId: clinic.id,\n  clinicName: clinic.name,\n  calendarId: clinic.google_calendar_id,\n  timeMin: timeMin.toISOString(),\n  timeMax: timeMax.toISOString()\n}];"
+        "jsCode": "// Prepare for Google Calendar API - handle multiple calendar IDs\nconst clinic = $input.first().json;\n\n// Get events from last 24 hours to next 30 days\nconst timeMin = new Date();\ntimeMin.setHours(timeMin.getHours() - 24);\n\nconst timeMax = new Date();\ntimeMax.setDate(timeMax.getDate() + 30);\n\n// Split by newlines and filter empty lines\nconst calendarIds = (clinic.google_calendar_id || '').split('\\n').map(id => id.trim()).filter(id => id.length > 0);\n\nreturn calendarIds.map(calendarId => ({\n  clinicId: clinic.id,\n  clinicName: clinic.name,\n  calendarId: calendarId,\n  timeMin: timeMin.toISOString(),\n  timeMax: timeMax.toISOString()\n}));"
       },
       "id": "parse-calendars",
       "name": "Prepare Calendar Query",
