@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { Calendar, Search, Filter, ChevronDown, Loader2, Plus, Clock, User, X, MessageCircle, Phone } from 'lucide-react'
+import { Calendar, Search, Filter, ChevronDown, Loader2, Plus, Clock, User, X, MessageCircle, Phone, CalendarDays } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 interface Appointment {
@@ -13,7 +13,7 @@ interface Appointment {
   type: string | null
   notes: string | null
   price: number | null
-  source: 'manual' | 'whatsapp' | 'phone' | null
+  source: 'manual' | 'whatsapp' | 'phone' | 'google_calendar' | null
   doctor_id: string | null
   patient_id: string | null
   doctor: {
@@ -436,6 +436,12 @@ export default function AppointmentsPage() {
                             <span className="flex items-center gap-1 px-2 py-1 bg-blue-100 text-blue-700 text-xs rounded-full">
                               <Phone className="w-3 h-3" />
                               Телефон
+                            </span>
+                          )}
+                          {appointment.source === 'google_calendar' && (
+                            <span className="flex items-center gap-1 px-2 py-1 bg-purple-100 text-purple-700 text-xs rounded-full">
+                              <CalendarDays className="w-3 h-3" />
+                              Google
                             </span>
                           )}
                         </div>
