@@ -40,8 +40,8 @@
           },
           "conditions": [
             {
-              "id": "has-calendars",
-              "leftValue": "={{ $json.google_calendars }}",
+              "id": "has-calendar",
+              "leftValue": "={{ $json.google_calendar_id }}",
               "rightValue": "",
               "operator": {
                 "type": "string",
@@ -61,10 +61,10 @@
     },
     {
       "parameters": {
-        "jsCode": "// Parse calendar config and prepare for Google Calendar API\nconst clinic = $input.first().json;\nconst calendars = JSON.parse(clinic.google_calendars || '[]');\n\n// Get events from last sync or last 24 hours\nconst timeMin = new Date();\ntimeMin.setHours(timeMin.getHours() - 24);\n\nconst timeMax = new Date();\ntimeMax.setDate(timeMax.getDate() + 30); // Next 30 days\n\nreturn calendars.map(cal => ({\n  clinicId: clinic.id,\n  clinicName: clinic.name,\n  calendarId: cal.calendarId,\n  calendarName: cal.name,\n  doctorId: cal.doctorId || null,\n  timeMin: timeMin.toISOString(),\n  timeMax: timeMax.toISOString()\n}));"
+        "jsCode": "// Prepare for Google Calendar API\nconst clinic = $input.first().json;\n\n// Get events from last 24 hours to next 30 days\nconst timeMin = new Date();\ntimeMin.setHours(timeMin.getHours() - 24);\n\nconst timeMax = new Date();\ntimeMax.setDate(timeMax.getDate() + 30);\n\nreturn [{\n  clinicId: clinic.id,\n  clinicName: clinic.name,\n  calendarId: clinic.google_calendar_id,\n  timeMin: timeMin.toISOString(),\n  timeMax: timeMax.toISOString()\n}];"
       },
       "id": "parse-calendars",
-      "name": "Parse Calendar Config",
+      "name": "Prepare Calendar Query",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [920, 300]
@@ -98,7 +98,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// Transform Google Calendar events to appointments format\nconst events = $input.all();\nconst clinicId = $('Parse Calendar Config').first().json.clinicId;\nconst doctorId = $('Parse Calendar Config').first().json.doctorId;\n\nreturn events.map(event => {\n  const e = event.json;\n  \n  // Parse patient info from event title/description\n  let patientName = 'Неизвестен';\n  let patientPhone = null;\n  let appointmentType = 'Преглед';\n  \n  // Try to extract name from title (format: \"Name - Type\" or just \"Name\")\n  if (e.summary) {\n    const parts = e.summary.split(' - ');\n    patientName = parts[0].trim();\n    if (parts[1]) appointmentType = parts[1].trim();\n  }\n  \n  // Try to extract phone from description\n  if (e.description) {\n    const phoneMatch = e.description.match(/\\d{9,12}/);\n    if (phoneMatch) patientPhone = phoneMatch[0];\n  }\n  \n  return {\n    googleEventId: e.id,\n    clinicId,\n    doctorId,\n    patientName,\n    patientPhone,\n    appointmentType,\n    startTime: e.start?.dateTime || e.start?.date,\n    endTime: e.end?.dateTime || e.end?.date,\n    status: e.status === 'cancelled' ? 'cancelled' : 'scheduled',\n    source: 'google_calendar'\n  };\n});"
+        "jsCode": "// Transform Google Calendar events to appointments format\nconst events = $input.all();\nconst clinicId = $('Prepare Calendar Query').first().json.clinicId;\n\nreturn events.map(event => {\n  const e = event.json;\n  \n  // Parse patient info from event title/description\n  let patientName = 'Неизвестен';\n  let patientPhone = null;\n  let appointmentType = 'Преглед';\n  \n  // Try to extract name from title (format: \"Name - Type\" or just \"Name\")\n  if (e.summary) {\n    const parts = e.summary.split(' - ');\n    patientName = parts[0].trim();\n    if (parts[1]) appointmentType = parts[1].trim();\n  }\n  \n  // Try to extract phone from description\n  if (e.description) {\n    const phoneMatch = e.description.match(/\\d{9,12}/);\n    if (phoneMatch) patientPhone = phoneMatch[0];\n  }\n  \n  return {\n    googleEventId: e.id,\n    clinicId,\n    patientName,\n    patientPhone,\n    appointmentType,\n    startTime: e.start?.dateTime || e.start?.date,\n    endTime: e.end?.dateTime || e.end?.date,\n    status: e.status === 'cancelled' ? 'cancelled' : 'scheduled',\n    source: 'google_calendar'\n  };\n});"
       },
       "id": "transform-events",
       "name": "Transform to Appointments",
@@ -149,14 +149,14 @@
       "main": [
         [
           {
-            "node": "Parse Calendar Config",
+            "node": "Prepare Calendar Query",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Parse Calendar Config": {
+    "Prepare Calendar Query": {
       "main": [
         [
           {

@@ -25,9 +25,10 @@ export default function AdminClinicsPage() {
     whatsapp_instance: '',
     whatsapp_api_key: '',
     evolution_api_url: 'https://evo.settbg.com',
-    google_calendars: ''
+    google_calendar_id: ''
   })
   const [saving, setSaving] = useState(false)
+  const [error, setError] = useState('')
 
   useEffect(() => {
     fetchClinics()
@@ -57,6 +58,7 @@ export default function AdminClinicsPage() {
 
   function openAddModal() {
     setEditingClinic(null)
+    setError('')
     setFormData({
       name: '',
       address: '',
@@ -64,13 +66,14 @@ export default function AdminClinicsPage() {
       whatsapp_instance: '',
       whatsapp_api_key: '',
       evolution_api_url: 'https://evo.settbg.com',
-      google_calendars: ''
+      google_calendar_id: ''
     })
     setShowModal(true)
   }
 
   async function openEditModal(clinic: Clinic) {
     setEditingClinic(clinic)
+    setError('')
     // Fetch full clinic details
     try {
       const response = await fetch(`/api/clinics/${clinic.id}`)
@@ -83,7 +86,7 @@ export default function AdminClinicsPage() {
           whatsapp_instance: fullClinic.whatsapp_instance || '',
           whatsapp_api_key: fullClinic.whatsapp_api_key || '',
           evolution_api_url: fullClinic.evolution_api_url || 'https://evo.settbg.com',
-          google_calendars: fullClinic.google_calendars || ''
+          google_calendar_id: fullClinic.google_calendar_id || ''
         })
       } else {
         setFormData({
@@ -93,7 +96,7 @@ export default function AdminClinicsPage() {
           whatsapp_instance: clinic.whatsapp_instance || '',
           whatsapp_api_key: '',
           evolution_api_url: 'https://evo.settbg.com',
-          google_calendars: ''
+          google_calendar_id: ''
         })
       }
     } catch {
@@ -104,7 +107,7 @@ export default function AdminClinicsPage() {
         whatsapp_instance: clinic.whatsapp_instance || '',
         whatsapp_api_key: '',
         evolution_api_url: 'https://evo.settbg.com',
-        google_calendars: ''
+        google_calendar_id: ''
       })
     }
     setShowModal(true)
@@ -113,6 +116,7 @@ export default function AdminClinicsPage() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     setSaving(true)
+    setError('')
 
     try {
       const url = editingClinic ? `/api/clinics/${editingClinic.id}` : '/api/clinics'
@@ -124,12 +128,17 @@ export default function AdminClinicsPage() {
         body: JSON.stringify(formData)
       })
 
+      const data = await response.json()
+
       if (response.ok) {
         setShowModal(false)
         fetchClinics()
+      } else {
+        setError(data.error || 'Грешка при запазване')
       }
-    } catch (error) {
-      console.error('Save error:', error)
+    } catch (err) {
+      console.error('Save error:', err)
+      setError('Грешка при свързване със сървъра')
     } finally {
       setSaving(false)
     }
@@ -362,20 +371,26 @@ export default function AdminClinicsPage() {
                 <h3 className="font-medium text-gray-900 border-b pb-2">Google Calendar</h3>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Calendar IDs (JSON формат)
+                    Calendar ID
                   </label>
-                  <textarea
-                    value={formData.google_calendars}
-                    onChange={(e) => setFormData({ ...formData, google_calendars: e.target.value })}
-                    placeholder='[{"name": "Д-р Иванов", "calendarId": "abc@group.calendar.google.com"}]'
-                    rows={3}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-900 font-mono text-sm"
+                  <input
+                    type="text"
+                    value={formData.google_calendar_id}
+                    onChange={(e) => setFormData({ ...formData, google_calendar_id: e.target.value })}
+                    placeholder="abc123@group.calendar.google.com"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-900"
                   />
                   <p className="text-xs text-gray-500 mt-1">
-                    Синхронизацията се извършва чрез n8n
+                    Намери го в Google Calendar Settings
                   </p>
                 </div>
               </div>
+
+              {error && (
+                <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
+                  {error}
+                </div>
+              )}
 
               <div className="flex gap-3 pt-4 sticky bottom-0 bg-white">
                 <button
