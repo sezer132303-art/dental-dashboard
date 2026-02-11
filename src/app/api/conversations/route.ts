@@ -1,177 +1,138 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase'
 
-interface ChatMessage {
-  type: 'human' | 'ai' | 'tool'
-  name?: string // tool name for tool messages
+interface WhatsAppConversation {
+  id: string
+  clinic_id: string
+  patient_phone: string
+  patient_id: string | null
+  status: string
+  started_at: string
+  resolved_at: string | null
+}
+
+interface WhatsAppMessage {
+  id: string
+  conversation_id: string
+  direction: 'inbound' | 'outbound'
   content: string
-  tool_calls?: Array<{
-    name: string
-    args: Record<string, unknown>
-  }>
+  parsed_intent: string | null
+  sent_at: string
 }
 
-interface ChatHistory {
-  id: number
-  session_id: string
-  message: ChatMessage
-  created_at: string
-}
-
-// GET /api/conversations - List conversations from n8n_chat_histories
+// GET /api/conversations - List WhatsApp conversations
 export async function GET(request: NextRequest) {
   try {
     const supabase = createServerSupabaseClient()
     const { searchParams } = new URL(request.url)
     const limit = parseInt(searchParams.get('limit') || '50')
+    const clinicId = searchParams.get('clinicId')
+    const status = searchParams.get('status') // 'active', 'resolved', 'booking_complete'
 
-    // Get unique sessions (conversations) from n8n_chat_histories
-    const { data: sessions, error: sessionsError } = await supabase
-      .from('n8n_chat_histories')
-      .select('session_id, created_at')
-      .order('created_at', { ascending: false })
+    // Get conversations from whatsapp_conversations table
+    let query = supabase
+      .from('whatsapp_conversations')
+      .select('*')
+      .order('started_at', { ascending: false })
+      .limit(limit)
 
-    if (sessionsError) {
-      console.error('Sessions error:', sessionsError)
+    if (clinicId) {
+      query = query.eq('clinic_id', clinicId)
+    }
+
+    if (status) {
+      query = query.eq('status', status)
+    }
+
+    const { data: conversations, error: convError } = await query
+
+    if (convError) {
+      console.error('Conversations error:', convError)
       // If table doesn't exist, return empty
-      if (sessionsError.code === '42P01') {
+      if (convError.code === '42P01') {
         return NextResponse.json({ conversations: [] })
       }
-      throw sessionsError
+      throw convError
     }
 
-    // Group by session_id to get unique conversations
-    const sessionMap = new Map<string, { firstMessage: string; lastMessage: string }>()
-    for (const row of sessions || []) {
-      if (!sessionMap.has(row.session_id)) {
-        sessionMap.set(row.session_id, {
-          firstMessage: row.created_at,
-          lastMessage: row.created_at
-        })
-      } else {
-        const existing = sessionMap.get(row.session_id)!
-        if (row.created_at > existing.lastMessage) {
-          existing.lastMessage = row.created_at
-        }
-        if (row.created_at < existing.firstMessage) {
-          existing.firstMessage = row.created_at
-        }
-      }
-    }
-
-    // Convert to array and sort by last message
-    const uniqueSessions = Array.from(sessionMap.entries())
-      .map(([sessionId, times]) => ({
-        sessionId,
-        ...times
-      }))
-      .sort((a, b) => new Date(b.lastMessage).getTime() - new Date(a.lastMessage).getTime())
-      .slice(0, limit)
-
-    // Get full conversation data for each session
-    const conversations = await Promise.all(
-      uniqueSessions.map(async (session) => {
-        // Get all messages for this session
+    // Get messages and patient info for each conversation
+    const enrichedConversations = await Promise.all(
+      (conversations || []).map(async (conv: WhatsAppConversation) => {
+        // Get messages for this conversation
         const { data: messages } = await supabase
-          .from('n8n_chat_histories')
+          .from('whatsapp_messages')
           .select('*')
-          .eq('session_id', session.sessionId)
-          .order('created_at', { ascending: true })
+          .eq('conversation_id', conv.id)
+          .order('sent_at', { ascending: true })
 
-        const chatMessages = (messages || []) as ChatHistory[]
+        const chatMessages = (messages || []) as WhatsAppMessage[]
 
-        // Parse messages into human-readable format
-        const parsedMessages = chatMessages.map((msg) => {
-          const messageData = msg.message
-          let direction: 'inbound' | 'outbound' = 'inbound'
-          let content = ''
-          let intent: string | null = null
-
-          if (messageData.type === 'human') {
-            direction = 'inbound'
-            content = messageData.content || ''
-          } else if (messageData.type === 'ai') {
-            direction = 'outbound'
-            content = messageData.content || ''
-            // Check for tool calls to determine intent
-            if (messageData.tool_calls?.length) {
-              const toolName = messageData.tool_calls[0].name
-              if (toolName === 'vzemi' || toolName === 'ONER') {
-                intent = 'booking_request'
-              } else if (toolName === 'saveCRM') {
-                intent = 'booking_complete'
-              }
-            }
-          } else if (messageData.type === 'tool') {
-            // Skip tool messages in display
-            return null
-          }
-
-          // Skip empty messages
-          if (!content || content.trim() === '') {
-            return null
-          }
-
-          // Skip internal agent thoughts/tool calls
-          if (content.includes('Calling ') && content.includes(' with input:')) {
-            return null
-          }
-          if (content.startsWith('Tool ') && content.includes(' returned:')) {
-            return null
-          }
-          // Skip JSON-like internal messages
-          if (content.trim().startsWith('{') && content.includes('"query"')) {
-            return null
-          }
-
-          return {
-            id: msg.id.toString(),
-            direction,
-            content,
-            parsed_intent: intent,
-            sent_at: msg.created_at
-          }
-        }).filter(Boolean)
-
-        // Get patient info from clients table if exists
+        // Get patient info if patient_id exists
         let patient = null
-        const { data: clientData } = await supabase
-          .from('clients')
-          .select('*')
-          .eq('phone', session.sessionId)
-          .single()
+        if (conv.patient_id) {
+          const { data: patientData } = await supabase
+            .from('patients')
+            .select('id, name, phone')
+            .eq('id', conv.patient_id)
+            .single()
 
-        if (clientData) {
-          patient = {
-            id: clientData.id,
-            name: clientData.name || clientData.ime || 'Клиент',
-            phone: clientData.phone
+          if (patientData) {
+            patient = patientData
           }
         }
 
-        // Determine conversation status
-        const hasBooking = parsedMessages.some(m => m?.parsed_intent === 'booking_complete')
-        const status = hasBooking ? 'booking_complete' : 'active'
+        // If no patient_id, try to find by phone
+        if (!patient && conv.patient_phone) {
+          const { data: patientData } = await supabase
+            .from('patients')
+            .select('id, name, phone')
+            .eq('phone', conv.patient_phone)
+            .maybeSingle()
 
-        const humanMessages = parsedMessages.filter(m => m?.direction === 'inbound')
+          if (patientData) {
+            patient = patientData
+          }
+        }
+
+        // Format messages
+        const formattedMessages = chatMessages.map(msg => ({
+          id: msg.id,
+          direction: msg.direction,
+          content: msg.content,
+          parsed_intent: msg.parsed_intent,
+          sent_at: msg.sent_at
+        }))
+
+        // Get last human message
+        const humanMessages = formattedMessages.filter(m => m.direction === 'inbound')
         const lastHumanMessage = humanMessages[humanMessages.length - 1]
 
+        // Calculate updated_at from last message
+        const lastMessage = formattedMessages[formattedMessages.length - 1]
+        const updatedAt = lastMessage?.sent_at || conv.started_at
+
         return {
-          id: session.sessionId, // Use phone as ID
-          patient_phone: session.sessionId,
-          patient_id: patient?.id || null,
-          status,
-          started_at: session.firstMessage,
-          updated_at: session.lastMessage,
-          patient,
-          messagesCount: parsedMessages.length,
-          lastMessage: lastHumanMessage || parsedMessages[parsedMessages.length - 1],
-          recentMessages: parsedMessages.slice(-10).reverse()
+          id: conv.id,
+          patient_phone: conv.patient_phone,
+          patient_id: conv.patient_id,
+          clinic_id: conv.clinic_id,
+          status: conv.status,
+          started_at: conv.started_at,
+          resolved_at: conv.resolved_at,
+          updated_at: updatedAt,
+          patient: patient || {
+            id: null,
+            name: conv.patient_phone,
+            phone: conv.patient_phone
+          },
+          messagesCount: formattedMessages.length,
+          lastMessage: lastHumanMessage || lastMessage,
+          recentMessages: formattedMessages.slice(-10).reverse()
         }
       })
     )
 
-    return NextResponse.json({ conversations })
+    return NextResponse.json({ conversations: enrichedConversations })
 
   } catch (error) {
     console.error('Conversations API error:', error)
@@ -182,6 +143,7 @@ export async function GET(request: NextRequest) {
 // POST /api/conversations - Actions on conversations
 export async function POST(request: NextRequest) {
   try {
+    const supabase = createServerSupabaseClient()
     const body = await request.json()
     const { conversationId, action } = body
 
@@ -190,11 +152,44 @@ export async function POST(request: NextRequest) {
     }
 
     if (action === 'resolve') {
-      // For n8n_chat_histories, we don't have a status field
-      // Just return success - the conversation is "resolved" by nature of no new messages
+      // Update conversation status to resolved
+      const { error } = await supabase
+        .from('whatsapp_conversations')
+        .update({
+          status: 'resolved',
+          resolved_at: new Date().toISOString()
+        })
+        .eq('id', conversationId)
+
+      if (error) {
+        console.error('Error resolving conversation:', error)
+        return NextResponse.json({ error: 'Грешка при приключване на разговора' }, { status: 500 })
+      }
+
       return NextResponse.json({
         success: true,
         message: 'Разговорът е маркиран като приключен'
+      })
+    }
+
+    if (action === 'reopen') {
+      // Reopen a resolved conversation
+      const { error } = await supabase
+        .from('whatsapp_conversations')
+        .update({
+          status: 'active',
+          resolved_at: null
+        })
+        .eq('id', conversationId)
+
+      if (error) {
+        console.error('Error reopening conversation:', error)
+        return NextResponse.json({ error: 'Грешка при отваряне на разговора' }, { status: 500 })
+      }
+
+      return NextResponse.json({
+        success: true,
+        message: 'Разговорът е отворен отново'
       })
     }
 

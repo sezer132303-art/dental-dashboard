@@ -17,7 +17,16 @@ import {
   MessageCircle,
   UserPlus
 } from 'lucide-react'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+
+interface User {
+  id: string
+  phone: string
+  name: string
+  email: string | null
+  role: string
+  clinic_id: string
+}
 
 const navigation = [
   { name: 'Табло', href: '/', icon: LayoutDashboard },
@@ -43,10 +52,29 @@ export default function DashboardLayout({
   const pathname = usePathname()
   const router = useRouter()
   const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [user, setUser] = useState<User | null>(null)
+  const [loading, setLoading] = useState(true)
 
-  // TODO: Get from session
-  const isAdmin = true
-  const userName = 'Администратор'
+  // Fetch user from session
+  useEffect(() => {
+    async function fetchUser() {
+      try {
+        const response = await fetch('/api/auth/me')
+        if (response.ok) {
+          const data = await response.json()
+          setUser(data.user)
+        }
+      } catch (error) {
+        console.error('Error fetching user:', error)
+      } finally {
+        setLoading(false)
+      }
+    }
+    fetchUser()
+  }, [])
+
+  const isAdmin = user?.role === 'admin' || user?.role === 'super_admin'
+  const userName = user?.name || 'Потребител'
 
   async function handleLogout() {
     try {

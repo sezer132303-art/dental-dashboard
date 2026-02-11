@@ -17,12 +17,12 @@ interface CalendarAppointment {
 // POST /api/n8n/sync-calendar - Sync calendar events to appointments
 export async function POST(request: NextRequest) {
   try {
-    // Note: Authentication disabled for development
-    // TODO: Re-enable API key verification for production
-    // const apiKey = request.headers.get('X-API-Key') || request.headers.get('Authorization')?.replace('Bearer ', '')
-    // if (!apiKey || apiKey !== process.env.N8N_API_KEY) {
-    //   return NextResponse.json({ error: 'API key required' }, { status: 401 })
-    // }
+    // API Key authentication for n8n webhooks
+    const apiKey = request.headers.get('X-API-Key') || request.headers.get('Authorization')?.replace('Bearer ', '')
+    if (!apiKey || apiKey !== process.env.N8N_API_KEY) {
+      console.error('Calendar sync: Invalid or missing API key')
+      return NextResponse.json({ error: 'API key required' }, { status: 401 })
+    }
 
     const body = await request.json()
     const { appointments } = body as { appointments: CalendarAppointment[] }
