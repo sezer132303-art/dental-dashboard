@@ -129,7 +129,7 @@ export async function POST(request: NextRequest) {
         const startDate = new Date(apt.startTime)
         const endDate = new Date(apt.endTime)
 
-        const date = startDate.toISOString().split('T')[0]
+        const appointmentDate = startDate.toISOString().split('T')[0]
         const startTime = startDate.toTimeString().slice(0, 5)
         const endTime = endDate.toTimeString().slice(0, 5)
 
@@ -140,7 +140,7 @@ export async function POST(request: NextRequest) {
             clinic_id: apt.clinicId,
             doctor_id: doctorId,
             patient_id: patientId,
-            date,
+            appointment_date: appointmentDate,
             start_time: startTime,
             end_time: endTime,
             type: apt.appointmentType,
