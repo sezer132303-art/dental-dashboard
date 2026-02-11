@@ -250,7 +250,15 @@ export default function CalendarPage() {
   }
 
   const goToDate = (date: Date) => {
-    setCurrentWeekStart(getMonday(date))
+    // Create a clean date object to avoid any reference issues
+    const targetDate = new Date(date.getFullYear(), date.getMonth(), date.getDate())
+    const monday = getMonday(targetDate)
+    console.log('goToDate called:', {
+      clickedDate: targetDate.toDateString(),
+      mondayOfWeek: monday.toDateString(),
+      currentWeekStart: currentWeekStart?.toDateString()
+    })
+    setCurrentWeekStart(monday)
     setShowDatePicker(false)
   }
 
@@ -511,7 +519,12 @@ export default function CalendarPage() {
                 {getMonthDays(pickerMonth).map((day, index) => (
                   <button
                     key={index}
-                    onClick={() => day && goToDate(day)}
+                    onClick={() => {
+                      if (day) {
+                        console.log('Day clicked:', day.toDateString())
+                        goToDate(day)
+                      }
+                    }}
                     disabled={!day}
                     className={cn(
                       'w-8 h-8 rounded-lg text-sm transition',
