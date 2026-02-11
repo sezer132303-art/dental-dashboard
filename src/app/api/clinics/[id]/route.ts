@@ -79,17 +79,20 @@ export async function PATCH(
       const doctorsList: DoctorInput[] = body.doctors.filter((d: any) => d.name?.trim())
 
       if (doctorsList.length > 0) {
-        // Get existing doctors for this clinic
+        // Get existing doctors for this clinic with their calendar_ids
         const { data: existingDoctors } = await supabase
           .from('doctors')
-          .select('id')
+          .select('id, calendar_id')
           .eq('clinic_id', id)
 
-        const existingIds = existingDoctors?.map(d => d.id) || []
+        const existingDoctorsMap = new Map(
+          existingDoctors?.map(d => [d.id, d.calendar_id]) || []
+        )
+        const existingIds = Array.from(existingDoctorsMap.keys())
         const submittedIds = doctorsList.filter(d => d.id).map(d => d.id!)
 
         // Doctors to delete (exist in DB but not in submitted list)
-        const toDelete = existingIds.filter(id => !submittedIds.includes(id))
+        const toDelete = existingIds.filter(docId => !submittedIds.includes(docId))
         if (toDelete.length > 0) {
           await supabase
             .from('doctors')
@@ -101,12 +104,17 @@ export async function PATCH(
         for (const doctor of doctorsList) {
           if (doctor.id && existingIds.includes(doctor.id)) {
             // Update existing doctor
+            // Preserve existing calendar_id if new one is empty
+            const existingCalendarId = existingDoctorsMap.get(doctor.id)
+            const newCalendarId = doctor.calendar_id?.trim()
+            const calendarIdToSave = newCalendarId || existingCalendarId || null
+
             await supabase
               .from('doctors')
               .update({
                 name: doctor.name.trim(),
                 specialty: doctor.specialty || 'Зъболекар',
-                calendar_id: doctor.calendar_id?.trim() || null
+                calendar_id: calendarIdToSave
               })
               .eq('id', doctor.id)
           } else {
