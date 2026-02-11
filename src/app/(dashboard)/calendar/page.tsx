@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState, useRef } from 'react'
-import { ChevronLeft, ChevronRight, Loader2, Clock, User, CalendarDays, X, Phone, Calendar, Stethoscope } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Loader2, Clock, User, CalendarDays, X, Phone, Stethoscope, Check, XCircle, Edit3, Save, MessageSquare } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 interface Doctor {
@@ -49,6 +49,9 @@ export default function CalendarPage() {
   const [showDatePicker, setShowDatePicker] = useState(false)
   const [pickerMonth, setPickerMonth] = useState(new Date())
   const [selectedAppointment, setSelectedAppointment] = useState<Appointment | null>(null)
+  const [isEditing, setIsEditing] = useState(false)
+  const [editForm, setEditForm] = useState({ status: '', type: '', notes: '' })
+  const [saving, setSaving] = useState(false)
   const datePickerRef = useRef<HTMLDivElement>(null)
   const [currentWeekStart, setCurrentWeekStart] = useState<Date>(() => {
     const now = new Date()
@@ -236,6 +239,58 @@ export default function CalendarPage() {
     completed: 'Завършен',
     no_show: 'Неявил се',
     cancelled: 'Отменен'
+  }
+
+  const openAppointmentModal = (apt: Appointment) => {
+    setSelectedAppointment(apt)
+    setEditForm({
+      status: apt.status,
+      type: apt.type || '',
+      notes: apt.notes || ''
+    })
+    setIsEditing(false)
+  }
+
+  const updateAppointment = async (updates: Partial<{ status: string; type: string; notes: string }>) => {
+    if (!selectedAppointment) return
+
+    setSaving(true)
+    try {
+      const response = await fetch(`/api/appointments/${selectedAppointment.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updates)
+      })
+
+      if (response.ok) {
+        // Update local state
+        setAppointments(prev =>
+          prev.map(apt =>
+            apt.id === selectedAppointment.id
+              ? { ...apt, ...updates }
+              : apt
+          )
+        )
+        setSelectedAppointment(prev => prev ? { ...prev, ...updates } : null)
+        setIsEditing(false)
+      }
+    } catch (err) {
+      console.error('Error updating appointment:', err)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const quickStatusChange = async (newStatus: string) => {
+    await updateAppointment({ status: newStatus })
+  }
+
+  const saveEdits = async () => {
+    await updateAppointment({
+      status: editForm.status,
+      type: editForm.type || null,
+      notes: editForm.notes || null
+    } as any)
   }
 
   const weekDays = getWeekDays()
@@ -462,7 +517,7 @@ export default function CalendarPage() {
                             )}
                             style={{ top: `${top}px`, height: `${Math.max(height, 20)}px` }}
                             title={`${apt.patient?.name || 'Пациент'} - ${apt.type || 'Час'}`}
-                            onClick={() => setSelectedAppointment(apt)}
+                            onClick={() => openAppointmentModal(apt)}
                           >
                             <div className="font-medium truncate">
                               {apt.patient?.name || 'Пациент'}
@@ -548,14 +603,76 @@ export default function CalendarPage() {
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between mb-6">
-              <h2 className="text-xl font-bold text-gray-900">Детайли за часа</h2>
-              <button
-                onClick={() => setSelectedAppointment(null)}
-                className="p-2 hover:bg-gray-100 rounded-lg transition"
-              >
-                <X className="w-5 h-5 text-gray-500" />
-              </button>
+              <h2 className="text-xl font-bold text-gray-900">
+                {isEditing ? 'Редактирай час' : 'Детайли за часа'}
+              </h2>
+              <div className="flex items-center gap-2">
+                {!isEditing && (
+                  <button
+                    onClick={() => setIsEditing(true)}
+                    className="p-2 hover:bg-blue-50 rounded-lg transition text-blue-600"
+                    title="Редактирай"
+                  >
+                    <Edit3 className="w-5 h-5" />
+                  </button>
+                )}
+                <button
+                  onClick={() => {
+                    setSelectedAppointment(null)
+                    setIsEditing(false)
+                  }}
+                  className="p-2 hover:bg-gray-100 rounded-lg transition"
+                >
+                  <X className="w-5 h-5 text-gray-500" />
+                </button>
+              </div>
             </div>
+
+            {/* Quick Actions - Always visible */}
+            {selectedAppointment.status !== 'completed' && selectedAppointment.status !== 'cancelled' && (
+              <div className="mb-4 p-3 bg-gray-50 rounded-lg">
+                <p className="text-xs text-gray-500 mb-2">Бързи действия:</p>
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    onClick={() => quickStatusChange('confirmed')}
+                    disabled={saving || selectedAppointment.status === 'confirmed'}
+                    className={cn(
+                      'flex items-center gap-1 px-3 py-1.5 text-sm font-medium rounded-lg transition',
+                      selectedAppointment.status === 'confirmed'
+                        ? 'bg-indigo-100 text-indigo-400 cursor-not-allowed'
+                        : 'bg-indigo-100 text-indigo-700 hover:bg-indigo-200'
+                    )}
+                  >
+                    <Check className="w-4 h-4" />
+                    Потвърди
+                  </button>
+                  <button
+                    onClick={() => quickStatusChange('completed')}
+                    disabled={saving}
+                    className="flex items-center gap-1 px-3 py-1.5 text-sm font-medium bg-green-100 text-green-700 rounded-lg hover:bg-green-200 transition"
+                  >
+                    <Check className="w-4 h-4" />
+                    Завърши
+                  </button>
+                  <button
+                    onClick={() => quickStatusChange('no_show')}
+                    disabled={saving}
+                    className="flex items-center gap-1 px-3 py-1.5 text-sm font-medium bg-red-100 text-red-700 rounded-lg hover:bg-red-200 transition"
+                  >
+                    <XCircle className="w-4 h-4" />
+                    Неявил се
+                  </button>
+                  <button
+                    onClick={() => quickStatusChange('cancelled')}
+                    disabled={saving}
+                    className="flex items-center gap-1 px-3 py-1.5 text-sm font-medium bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition"
+                  >
+                    <X className="w-4 h-4" />
+                    Отмени
+                  </button>
+                </div>
+              </div>
+            )}
 
             <div className="space-y-4">
               {/* Patient Name */}
@@ -590,14 +707,24 @@ export default function CalendarPage() {
                 </div>
               </div>
 
-              {/* Service/Type */}
+              {/* Service/Type - Editable */}
               <div className="flex items-start gap-3 p-3 bg-purple-50 rounded-lg">
                 <Stethoscope className="w-5 h-5 text-purple-600 mt-0.5" />
-                <div>
+                <div className="flex-1">
                   <p className="text-sm text-purple-600 font-medium">Услуга</p>
-                  <p className="text-lg font-bold text-gray-900">
-                    {selectedAppointment.type || 'Преглед'}
-                  </p>
+                  {isEditing ? (
+                    <input
+                      type="text"
+                      value={editForm.type}
+                      onChange={(e) => setEditForm({ ...editForm, type: e.target.value })}
+                      placeholder="Преглед, Почистване, Пломба..."
+                      className="w-full mt-1 px-3 py-2 border border-purple-200 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent text-gray-900"
+                    />
+                  ) : (
+                    <p className="text-lg font-bold text-gray-900">
+                      {selectedAppointment.type || 'Преглед'}
+                    </p>
+                  )}
                 </div>
               </div>
 
@@ -633,32 +760,94 @@ export default function CalendarPage() {
                 </div>
               )}
 
-              {/* Status */}
-              <div className="flex items-center justify-between p-3 bg-gray-100 rounded-lg">
-                <span className="text-sm text-gray-600">Статус:</span>
-                <span className={cn(
-                  'px-3 py-1 text-sm font-medium rounded-full text-white',
-                  statusColors[selectedAppointment.status] || 'bg-blue-500'
-                )}>
-                  {statusLabels[selectedAppointment.status] || selectedAppointment.status}
-                </span>
+              {/* Status - Editable */}
+              <div className="p-3 bg-gray-100 rounded-lg">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-gray-600">Статус:</span>
+                  {isEditing ? (
+                    <select
+                      value={editForm.status}
+                      onChange={(e) => setEditForm({ ...editForm, status: e.target.value })}
+                      className="px-3 py-1 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-900"
+                    >
+                      <option value="scheduled">Насрочен</option>
+                      <option value="confirmed">Потвърден</option>
+                      <option value="completed">Завършен</option>
+                      <option value="no_show">Неявил се</option>
+                      <option value="cancelled">Отменен</option>
+                    </select>
+                  ) : (
+                    <span className={cn(
+                      'px-3 py-1 text-sm font-medium rounded-full text-white',
+                      statusColors[selectedAppointment.status] || 'bg-blue-500'
+                    )}>
+                      {statusLabels[selectedAppointment.status] || selectedAppointment.status}
+                    </span>
+                  )}
+                </div>
               </div>
 
-              {/* Notes */}
-              {selectedAppointment.notes && (
-                <div className="p-3 bg-yellow-50 rounded-lg">
-                  <p className="text-sm text-yellow-700 font-medium mb-1">Бележки:</p>
-                  <p className="text-gray-900">{selectedAppointment.notes}</p>
+              {/* Notes - Editable */}
+              <div className="p-3 bg-yellow-50 rounded-lg">
+                <div className="flex items-center gap-2 mb-2">
+                  <MessageSquare className="w-4 h-4 text-yellow-700" />
+                  <p className="text-sm text-yellow-700 font-medium">Бележки:</p>
                 </div>
-              )}
+                {isEditing ? (
+                  <textarea
+                    value={editForm.notes}
+                    onChange={(e) => setEditForm({ ...editForm, notes: e.target.value })}
+                    rows={3}
+                    placeholder="Добави бележки..."
+                    className="w-full px-3 py-2 border border-yellow-200 rounded-lg focus:ring-2 focus:ring-yellow-500 focus:border-transparent text-gray-900"
+                  />
+                ) : (
+                  <p className="text-gray-900">
+                    {selectedAppointment.notes || <span className="text-gray-400 italic">Няма бележки</span>}
+                  </p>
+                )}
+              </div>
             </div>
 
-            <button
-              onClick={() => setSelectedAppointment(null)}
-              className="w-full mt-6 px-4 py-3 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 transition"
-            >
-              Затвори
-            </button>
+            {/* Action Buttons */}
+            <div className="flex gap-3 mt-6">
+              {isEditing ? (
+                <>
+                  <button
+                    onClick={() => {
+                      setIsEditing(false)
+                      setEditForm({
+                        status: selectedAppointment.status,
+                        type: selectedAppointment.type || '',
+                        notes: selectedAppointment.notes || ''
+                      })
+                    }}
+                    className="flex-1 px-4 py-3 border border-gray-300 text-gray-700 font-medium rounded-lg hover:bg-gray-50 transition"
+                  >
+                    Отказ
+                  </button>
+                  <button
+                    onClick={saveEdits}
+                    disabled={saving}
+                    className="flex-1 px-4 py-3 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 transition flex items-center justify-center gap-2 disabled:opacity-50"
+                  >
+                    {saving ? (
+                      <Loader2 className="w-5 h-5 animate-spin" />
+                    ) : (
+                      <Save className="w-5 h-5" />
+                    )}
+                    {saving ? 'Запазване...' : 'Запази'}
+                  </button>
+                </>
+              ) : (
+                <button
+                  onClick={() => setSelectedAppointment(null)}
+                  className="w-full px-4 py-3 bg-gray-100 text-gray-700 font-medium rounded-lg hover:bg-gray-200 transition"
+                >
+                  Затвори
+                </button>
+              )}
+            </div>
           </div>
         </div>
       )}
