@@ -36,6 +36,7 @@ export async function POST(request: NextRequest) {
     let synced = 0
     let skipped = 0
     let errors = 0
+    const errorDetails: string[] = []
 
     for (const apt of appointments) {
       try {
@@ -102,19 +103,24 @@ export async function POST(request: NextRequest) {
         // Get first doctor if not specified
         let doctorId = apt.doctorId
         if (!doctorId) {
-          const { data: doctor } = await supabase
+          const { data: doctor, error: doctorError } = await supabase
             .from('doctors')
             .select('id')
             .eq('clinic_id', apt.clinicId)
             .eq('is_active', true)
             .limit(1)
-            .single()
+            .maybeSingle()
 
+          if (doctorError) {
+            console.error('Doctor query error:', doctorError)
+          }
           doctorId = doctor?.id
         }
 
         if (!doctorId) {
-          console.error('No doctor found for clinic:', apt.clinicId)
+          const msg = `No doctor found for clinic: ${apt.clinicId}`
+          console.error(msg)
+          errorDetails.push(msg)
           errors++
           continue
         }
@@ -145,14 +151,18 @@ export async function POST(request: NextRequest) {
           })
 
         if (insertError) {
+          const msg = `Insert error: ${insertError.message}`
           console.error('Insert appointment error:', insertError)
+          errorDetails.push(msg)
           errors++
         } else {
           synced++
         }
 
       } catch (err) {
+        const msg = `Sync error: ${err instanceof Error ? err.message : String(err)}`
         console.error('Sync appointment error:', err)
+        errorDetails.push(msg)
         errors++
       }
     }
@@ -162,6 +172,7 @@ export async function POST(request: NextRequest) {
       synced,
       skipped,
       errors,
+      errorDetails: errorDetails.slice(0, 10),
       total: appointments.length
     })
 
