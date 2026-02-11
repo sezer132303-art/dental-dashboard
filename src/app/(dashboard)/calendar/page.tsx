@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState, useRef } from 'react'
-import { ChevronLeft, ChevronRight, Loader2, Clock, User, CalendarDays } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Loader2, Clock, User, CalendarDays, X, Phone, Calendar, Stethoscope } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 interface Doctor {
@@ -18,6 +18,7 @@ interface Appointment {
   end_time: string
   status: string
   type: string | null
+  notes: string | null
   doctor: {
     id: string
     name: string
@@ -47,6 +48,7 @@ export default function CalendarPage() {
   const [selectedDoctor, setSelectedDoctor] = useState<Doctor | null>(null)
   const [showDatePicker, setShowDatePicker] = useState(false)
   const [pickerMonth, setPickerMonth] = useState(new Date())
+  const [selectedAppointment, setSelectedAppointment] = useState<Appointment | null>(null)
   const datePickerRef = useRef<HTMLDivElement>(null)
   const [currentWeekStart, setCurrentWeekStart] = useState<Date>(() => {
     const now = new Date()
@@ -210,6 +212,30 @@ export default function CalendarPage() {
   const isToday = (date: Date) => {
     const today = new Date()
     return formatDate(date) === formatDate(today)
+  }
+
+  const formatPhone = (phone: string) => {
+    if (phone.startsWith('359')) {
+      return `+${phone.slice(0, 3)} ${phone.slice(3, 6)} ${phone.slice(6, 9)} ${phone.slice(9)}`
+    }
+    return phone
+  }
+
+  const formatDisplayDate = (dateStr: string) => {
+    return new Date(dateStr).toLocaleDateString('bg-BG', {
+      weekday: 'long',
+      day: 'numeric',
+      month: 'long',
+      year: 'numeric'
+    })
+  }
+
+  const statusLabels: Record<string, string> = {
+    scheduled: 'Насрочен',
+    confirmed: 'Потвърден',
+    completed: 'Завършен',
+    no_show: 'Неявил се',
+    cancelled: 'Отменен'
   }
 
   const weekDays = getWeekDays()
@@ -431,11 +457,12 @@ export default function CalendarPage() {
                           <div
                             key={apt.id}
                             className={cn(
-                              'absolute left-1 right-1 rounded-md px-2 py-1 text-white text-xs overflow-hidden pointer-events-auto cursor-pointer hover:opacity-90 transition',
+                              'absolute left-1 right-1 rounded-md px-2 py-1 text-white text-xs overflow-hidden pointer-events-auto cursor-pointer hover:opacity-90 hover:shadow-lg transition',
                               statusColors[apt.status] || doctorColor
                             )}
                             style={{ top: `${top}px`, height: `${Math.max(height, 20)}px` }}
                             title={`${apt.patient?.name || 'Пациент'} - ${apt.type || 'Час'}`}
+                            onClick={() => setSelectedAppointment(apt)}
                           >
                             <div className="font-medium truncate">
                               {apt.patient?.name || 'Пациент'}
@@ -509,6 +536,132 @@ export default function CalendarPage() {
           )
         })}
       </div>
+
+      {/* Appointment Details Modal */}
+      {selectedAppointment && (
+        <div
+          className="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
+          onClick={() => setSelectedAppointment(null)}
+        >
+          <div
+            className="bg-white rounded-xl p-6 w-full max-w-md mx-4 shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-xl font-bold text-gray-900">Детайли за часа</h2>
+              <button
+                onClick={() => setSelectedAppointment(null)}
+                className="p-2 hover:bg-gray-100 rounded-lg transition"
+              >
+                <X className="w-5 h-5 text-gray-500" />
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              {/* Patient Name */}
+              <div className="flex items-start gap-3 p-3 bg-blue-50 rounded-lg">
+                <User className="w-5 h-5 text-blue-600 mt-0.5" />
+                <div>
+                  <p className="text-sm text-blue-600 font-medium">Пациент</p>
+                  <p className="text-lg font-bold text-gray-900">
+                    {selectedAppointment.patient?.name || 'Неизвестен'}
+                  </p>
+                </div>
+              </div>
+
+              {/* Phone */}
+              <div className="flex items-start gap-3 p-3 bg-green-50 rounded-lg">
+                <Phone className="w-5 h-5 text-green-600 mt-0.5" />
+                <div>
+                  <p className="text-sm text-green-600 font-medium">Телефон</p>
+                  <p className="text-lg font-bold text-gray-900">
+                    {selectedAppointment.patient?.phone
+                      ? formatPhone(selectedAppointment.patient.phone)
+                      : 'Не е посочен'}
+                  </p>
+                  {selectedAppointment.patient?.phone && (
+                    <a
+                      href={`tel:+${selectedAppointment.patient.phone}`}
+                      className="text-sm text-green-600 hover:underline"
+                    >
+                      Обади се
+                    </a>
+                  )}
+                </div>
+              </div>
+
+              {/* Service/Type */}
+              <div className="flex items-start gap-3 p-3 bg-purple-50 rounded-lg">
+                <Stethoscope className="w-5 h-5 text-purple-600 mt-0.5" />
+                <div>
+                  <p className="text-sm text-purple-600 font-medium">Услуга</p>
+                  <p className="text-lg font-bold text-gray-900">
+                    {selectedAppointment.type || 'Преглед'}
+                  </p>
+                </div>
+              </div>
+
+              {/* Date & Time */}
+              <div className="flex items-start gap-3 p-3 bg-orange-50 rounded-lg">
+                <Clock className="w-5 h-5 text-orange-600 mt-0.5" />
+                <div>
+                  <p className="text-sm text-orange-600 font-medium">Дата и час</p>
+                  <p className="text-lg font-bold text-gray-900">
+                    {selectedAppointment.start_time.slice(0, 5)} - {selectedAppointment.end_time.slice(0, 5)}
+                  </p>
+                  <p className="text-sm text-gray-600">
+                    {formatDisplayDate(selectedAppointment.appointment_date)}
+                  </p>
+                </div>
+              </div>
+
+              {/* Doctor */}
+              {selectedAppointment.doctor && (
+                <div className="flex items-start gap-3 p-3 bg-gray-50 rounded-lg">
+                  <div
+                    className={cn(
+                      'w-5 h-5 rounded-full mt-0.5',
+                      selectedAppointment.doctor.color || 'bg-blue-500'
+                    )}
+                  />
+                  <div>
+                    <p className="text-sm text-gray-600 font-medium">Лекар</p>
+                    <p className="text-lg font-bold text-gray-900">
+                      {selectedAppointment.doctor.name}
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {/* Status */}
+              <div className="flex items-center justify-between p-3 bg-gray-100 rounded-lg">
+                <span className="text-sm text-gray-600">Статус:</span>
+                <span className={cn(
+                  'px-3 py-1 text-sm font-medium rounded-full text-white',
+                  statusColors[selectedAppointment.status] || 'bg-blue-500'
+                )}>
+                  {statusLabels[selectedAppointment.status] || selectedAppointment.status}
+                </span>
+              </div>
+
+              {/* Notes */}
+              {selectedAppointment.notes && (
+                <div className="p-3 bg-yellow-50 rounded-lg">
+                  <p className="text-sm text-yellow-700 font-medium mb-1">Бележки:</p>
+                  <p className="text-gray-900">{selectedAppointment.notes}</p>
+                </div>
+              )}
+            </div>
+
+            <button
+              onClick={() => setSelectedAppointment(null)}
+              className="w-full mt-6 px-4 py-3 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 transition"
+            >
+              Затвори
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
