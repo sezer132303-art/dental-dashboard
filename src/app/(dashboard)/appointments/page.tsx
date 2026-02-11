@@ -382,7 +382,11 @@ export default function AppointmentsPage() {
               <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
                 <div className="divide-y divide-gray-100">
                   {dateAppointments.map((appointment) => (
-                    <div key={appointment.id} className="p-4 hover:bg-gray-50 transition">
+                    <div
+                      key={appointment.id}
+                      className="p-4 hover:bg-gray-50 transition cursor-pointer"
+                      onClick={() => openEditModal(appointment)}
+                    >
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-4">
                           {/* Time */}
@@ -456,7 +460,7 @@ export default function AppointmentsPage() {
                           </span>
 
                           {/* Quick Actions */}
-                          <div className="flex gap-1">
+                          <div className="flex gap-1" onClick={(e) => e.stopPropagation()}>
                             {appointment.status === 'scheduled' && (
                               <>
                                 <button
