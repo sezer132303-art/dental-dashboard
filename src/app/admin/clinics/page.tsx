@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Building2, Plus, Search, Edit, Trash2, X, User } from 'lucide-react'
+import { Building2, Plus, Search, Edit, Trash2, X, User, Calendar } from 'lucide-react'
 
 interface Clinic {
   id: string
@@ -10,6 +10,19 @@ interface Clinic {
   doctors: number
   patients: number
   appointments: number
+}
+
+interface DoctorEntry {
+  id?: string
+  name: string
+  specialty: string
+  calendar_id: string
+}
+
+const emptyDoctor: DoctorEntry = {
+  name: '',
+  specialty: 'Зъболекар',
+  calendar_id: ''
 }
 
 export default function AdminClinicsPage() {
@@ -25,10 +38,9 @@ export default function AdminClinicsPage() {
     whatsapp_instance: '',
     whatsapp_api_key: '',
     evolution_api_url: 'https://evo.settbg.com',
-    google_calendar_id: '',
-    doctor_name: '',
-    doctor_specialty: 'Зъболекар'
+    google_calendar_id: ''
   })
+  const [doctors, setDoctors] = useState<DoctorEntry[]>([{ ...emptyDoctor }])
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
 
@@ -68,23 +80,19 @@ export default function AdminClinicsPage() {
       whatsapp_instance: '',
       whatsapp_api_key: '',
       evolution_api_url: 'https://evo.settbg.com',
-      google_calendar_id: '',
-      doctor_name: '',
-      doctor_specialty: 'Зъболекар'
+      google_calendar_id: ''
     })
+    setDoctors([{ ...emptyDoctor }])
     setShowModal(true)
   }
 
   async function openEditModal(clinic: Clinic) {
     setEditingClinic(clinic)
     setError('')
-    // Fetch full clinic details
     try {
       const response = await fetch(`/api/clinics/${clinic.id}`)
       if (response.ok) {
         const fullClinic = await response.json()
-        // Get first doctor if exists
-        const firstDoctor = fullClinic.doctors?.[0] || {}
         setFormData({
           name: fullClinic.name || '',
           address: fullClinic.address || '',
@@ -92,10 +100,19 @@ export default function AdminClinicsPage() {
           whatsapp_instance: fullClinic.whatsapp_instance || '',
           whatsapp_api_key: fullClinic.whatsapp_api_key || '',
           evolution_api_url: fullClinic.evolution_api_url || 'https://evo.settbg.com',
-          google_calendar_id: fullClinic.google_calendar_id || '',
-          doctor_name: firstDoctor.name || '',
-          doctor_specialty: firstDoctor.specialty || 'Зъболекар'
+          google_calendar_id: fullClinic.google_calendar_id || ''
         })
+        // Load existing doctors
+        if (fullClinic.doctors && fullClinic.doctors.length > 0) {
+          setDoctors(fullClinic.doctors.map((d: any) => ({
+            id: d.id,
+            name: d.name || '',
+            specialty: d.specialty || 'Зъболекар',
+            calendar_id: d.calendar_id || ''
+          })))
+        } else {
+          setDoctors([{ ...emptyDoctor }])
+        }
       } else {
         setFormData({
           name: clinic.name,
@@ -104,10 +121,9 @@ export default function AdminClinicsPage() {
           whatsapp_instance: clinic.whatsapp_instance || '',
           whatsapp_api_key: '',
           evolution_api_url: 'https://evo.settbg.com',
-          google_calendar_id: '',
-          doctor_name: '',
-          doctor_specialty: 'Зъболекар'
+          google_calendar_id: ''
         })
+        setDoctors([{ ...emptyDoctor }])
       }
     } catch {
       setFormData({
@@ -117,12 +133,27 @@ export default function AdminClinicsPage() {
         whatsapp_instance: clinic.whatsapp_instance || '',
         whatsapp_api_key: '',
         evolution_api_url: 'https://evo.settbg.com',
-        google_calendar_id: '',
-        doctor_name: '',
-        doctor_specialty: 'Зъболекар'
+        google_calendar_id: ''
       })
+      setDoctors([{ ...emptyDoctor }])
     }
     setShowModal(true)
+  }
+
+  function addDoctor() {
+    setDoctors([...doctors, { ...emptyDoctor }])
+  }
+
+  function removeDoctor(index: number) {
+    if (doctors.length > 1) {
+      setDoctors(doctors.filter((_, i) => i !== index))
+    }
+  }
+
+  function updateDoctor(index: number, field: keyof DoctorEntry, value: string) {
+    const updated = [...doctors]
+    updated[index] = { ...updated[index], [field]: value }
+    setDoctors(updated)
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -130,14 +161,37 @@ export default function AdminClinicsPage() {
     setSaving(true)
     setError('')
 
+    // Validate at least one doctor with name
+    const validDoctors = doctors.filter(d => d.name.trim())
+    if (validDoctors.length === 0) {
+      setError('Моля, добавете поне един лекар')
+      setSaving(false)
+      return
+    }
+
     try {
       const url = editingClinic ? `/api/clinics/${editingClinic.id}` : '/api/clinics'
       const method = editingClinic ? 'PATCH' : 'POST'
 
+      // Combine all calendar IDs from doctors
+      const allCalendarIds = doctors
+        .filter(d => d.calendar_id.trim())
+        .map(d => d.calendar_id.trim())
+        .join('\n')
+
       const response = await fetch(url, {
         method,
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(formData)
+        body: JSON.stringify({
+          ...formData,
+          google_calendar_id: allCalendarIds || formData.google_calendar_id,
+          doctors: validDoctors.map(d => ({
+            id: d.id,
+            name: d.name.trim(),
+            specialty: d.specialty,
+            calendar_id: d.calendar_id.trim()
+          }))
+        })
       })
 
       const data = await response.json()
@@ -281,9 +335,9 @@ export default function AdminClinicsPage() {
       {/* Modal */}
       {showModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl p-6 w-full max-w-md mx-4">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-lg font-semibold">
+          <div className="bg-white rounded-xl p-6 w-full max-w-lg mx-4 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between mb-4 sticky top-0 bg-white pb-2">
+              <h2 className="text-lg font-semibold text-gray-900">
                 {editingClinic ? 'Редактирай клиника' : 'Добави клиника'}
               </h2>
               <button onClick={() => setShowModal(false)} className="p-2 hover:bg-gray-100 rounded-lg">
@@ -291,7 +345,7 @@ export default function AdminClinicsPage() {
               </button>
             </div>
 
-            <form onSubmit={handleSubmit} className="space-y-4 max-h-[70vh] overflow-y-auto">
+            <form onSubmit={handleSubmit} className="space-y-6">
               {/* Basic Info */}
               <div className="space-y-4">
                 <h3 className="font-medium text-gray-900 border-b pb-2">Основна информация</h3>
@@ -335,6 +389,91 @@ export default function AdminClinicsPage() {
                 </div>
               </div>
 
+              {/* Doctors Section */}
+              <div className="space-y-4">
+                <div className="flex items-center justify-between border-b pb-2">
+                  <h3 className="font-medium text-gray-900">Лекари</h3>
+                  <button
+                    type="button"
+                    onClick={addDoctor}
+                    className="flex items-center gap-1 px-3 py-1 text-sm bg-green-50 text-green-700 rounded-lg hover:bg-green-100 transition"
+                  >
+                    <Plus className="w-4 h-4" />
+                    Добави лекар
+                  </button>
+                </div>
+
+                {doctors.map((doctor, index) => (
+                  <div key={index} className="p-4 bg-gray-50 rounded-lg space-y-3">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-medium text-gray-700 flex items-center gap-2">
+                        <User className="w-4 h-4" />
+                        Лекар {index + 1}
+                      </span>
+                      {doctors.length > 1 && (
+                        <button
+                          type="button"
+                          onClick={() => removeDoctor(index)}
+                          className="p-1 text-red-500 hover:bg-red-50 rounded"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      )}
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-xs font-medium text-gray-600 mb-1">
+                          Име *
+                        </label>
+                        <input
+                          type="text"
+                          value={doctor.name}
+                          onChange={(e) => updateDoctor(index, 'name', e.target.value)}
+                          placeholder="д-р Иван Иванов"
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-900 text-sm"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-gray-600 mb-1">
+                          Специалност
+                        </label>
+                        <select
+                          value={doctor.specialty}
+                          onChange={(e) => updateDoctor(index, 'specialty', e.target.value)}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-900 text-sm"
+                        >
+                          <option value="Зъболекар">Зъболекар</option>
+                          <option value="Ортодонт">Ортодонт</option>
+                          <option value="Орален хирург">Орален хирург</option>
+                          <option value="Ендодонт">Ендодонт</option>
+                          <option value="Пародонтолог">Пародонтолог</option>
+                          <option value="Детски зъболекар">Детски зъболекар</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-medium text-gray-600 mb-1 flex items-center gap-1">
+                        <Calendar className="w-3 h-3" />
+                        Google Calendar ID
+                      </label>
+                      <input
+                        type="text"
+                        value={doctor.calendar_id}
+                        onChange={(e) => updateDoctor(index, 'calendar_id', e.target.value)}
+                        placeholder="calendar@group.calendar.google.com"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-900 text-sm"
+                      />
+                    </div>
+                  </div>
+                ))}
+
+                <p className="text-xs text-gray-500">
+                  Всеки лекар може да има собствен Google Calendar за синхронизация на часове.
+                </p>
+              </div>
+
               {/* WhatsApp */}
               <div className="space-y-4">
                 <h3 className="font-medium text-gray-900 border-b pb-2">WhatsApp интеграция</h3>
@@ -351,85 +490,31 @@ export default function AdminClinicsPage() {
                   />
                 </div>
 
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Instance Name
-                  </label>
-                  <input
-                    type="text"
-                    value={formData.whatsapp_instance}
-                    onChange={(e) => setFormData({ ...formData, whatsapp_instance: e.target.value })}
-                    placeholder="clinic_sofia"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-900"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    API Key
-                  </label>
-                  <input
-                    type="text"
-                    value={formData.whatsapp_api_key}
-                    onChange={(e) => setFormData({ ...formData, whatsapp_api_key: e.target.value })}
-                    placeholder="your-api-key"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-900"
-                  />
-                </div>
-              </div>
-
-              {/* Doctor Info */}
-              <div className="space-y-4">
-                <h3 className="font-medium text-gray-900 border-b pb-2">Лекар</h3>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Име на лекаря *
-                  </label>
-                  <input
-                    type="text"
-                    value={formData.doctor_name}
-                    onChange={(e) => setFormData({ ...formData, doctor_name: e.target.value })}
-                    placeholder="д-р Иван Иванов"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-900"
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Специалност
-                  </label>
-                  <select
-                    value={formData.doctor_specialty}
-                    onChange={(e) => setFormData({ ...formData, doctor_specialty: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-900"
-                  >
-                    <option value="Зъболекар">Зъболекар</option>
-                    <option value="Ортодонт">Ортодонт</option>
-                    <option value="Орален хирург">Орален хирург</option>
-                    <option value="Ендодонт">Ендодонт</option>
-                    <option value="Пародонтолог">Пародонтолог</option>
-                    <option value="Детски зъболекар">Детски зъболекар</option>
-                  </select>
-                </div>
-              </div>
-
-              {/* Google Calendar */}
-              <div className="space-y-4">
-                <h3 className="font-medium text-gray-900 border-b pb-2">Google Calendar на лекаря</h3>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Calendar IDs (по един на ред)
-                  </label>
-                  <textarea
-                    value={formData.google_calendar_id}
-                    onChange={(e) => setFormData({ ...formData, google_calendar_id: e.target.value })}
-                    placeholder="calendar1@group.calendar.google.com&#10;calendar2@gmail.com"
-                    rows={3}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-900"
-                  />
-                  <p className="text-xs text-gray-500 mt-1">
-                    Намери Calendar ID в Google Calendar → Settings → Integrate calendar
-                  </p>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Instance Name
+                    </label>
+                    <input
+                      type="text"
+                      value={formData.whatsapp_instance}
+                      onChange={(e) => setFormData({ ...formData, whatsapp_instance: e.target.value })}
+                      placeholder="clinic_sofia"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-900"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      API Key
+                    </label>
+                    <input
+                      type="text"
+                      value={formData.whatsapp_api_key}
+                      onChange={(e) => setFormData({ ...formData, whatsapp_api_key: e.target.value })}
+                      placeholder="your-api-key"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-900"
+                    />
+                  </div>
                 </div>
               </div>
 
@@ -443,7 +528,7 @@ export default function AdminClinicsPage() {
                 <button
                   type="button"
                   onClick={() => setShowModal(false)}
-                  className="flex-1 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
+                  className="flex-1 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 text-gray-700"
                 >
                   Отказ
                 </button>

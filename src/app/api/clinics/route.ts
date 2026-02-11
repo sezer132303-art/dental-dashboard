@@ -1,6 +1,13 @@
 import { NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase'
 
+interface DoctorInput {
+  id?: string
+  name: string
+  specialty: string
+  calendar_id?: string
+}
+
 export async function GET() {
   try {
     const supabase = createServerSupabaseClient()
@@ -44,15 +51,25 @@ export async function POST(request: Request) {
     const body = await request.json()
     const {
       name, address, phone, whatsapp_instance, whatsapp_api_key,
-      evolution_api_url, google_calendar_id, doctor_name, doctor_specialty
+      evolution_api_url, google_calendar_id, doctors
     } = body
 
     if (!name) {
       return NextResponse.json({ error: 'Името е задължително' }, { status: 400 })
     }
 
-    if (!doctor_name) {
-      return NextResponse.json({ error: 'Името на лекаря е задължително' }, { status: 400 })
+    // Support both old format (doctor_name) and new format (doctors array)
+    const doctorsList: DoctorInput[] = doctors || []
+    if (body.doctor_name && doctorsList.length === 0) {
+      doctorsList.push({
+        name: body.doctor_name,
+        specialty: body.doctor_specialty || 'Зъболекар',
+        calendar_id: ''
+      })
+    }
+
+    if (doctorsList.length === 0 || !doctorsList.some(d => d.name?.trim())) {
+      return NextResponse.json({ error: 'Моля, добавете поне един лекар' }, { status: 400 })
     }
 
     const supabase = createServerSupabaseClient()
@@ -77,19 +94,25 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Грешка при създаване' }, { status: 500 })
     }
 
-    // Create doctor for this clinic
-    const { error: doctorError } = await supabase
-      .from('doctors')
-      .insert({
+    // Create doctors for this clinic
+    const validDoctors = doctorsList.filter(d => d.name?.trim())
+    if (validDoctors.length > 0) {
+      const doctorsToInsert = validDoctors.map(d => ({
         clinic_id: clinic.id,
-        name: doctor_name,
-        specialty: doctor_specialty || 'Зъболекар',
+        name: d.name.trim(),
+        specialty: d.specialty || 'Зъболекар',
+        calendar_id: d.calendar_id?.trim() || null,
         is_active: true
-      })
+      }))
 
-    if (doctorError) {
-      console.error('Create doctor error:', doctorError)
-      // Don't fail the whole request, just log
+      const { error: doctorError } = await supabase
+        .from('doctors')
+        .insert(doctorsToInsert)
+
+      if (doctorError) {
+        console.error('Create doctors error:', doctorError)
+        // Don't fail the whole request, just log
+      }
     }
 
     return NextResponse.json(clinic)

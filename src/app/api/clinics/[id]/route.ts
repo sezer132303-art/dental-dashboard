@@ -1,6 +1,13 @@
 import { NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase'
 
+interface DoctorInput {
+  id?: string
+  name: string
+  specialty: string
+  calendar_id?: string
+}
+
 export async function GET(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
@@ -13,7 +20,7 @@ export async function GET(
       .from('clinics')
       .select(`
         *,
-        doctors:doctors(id, name, specialty, is_active),
+        doctors:doctors(id, name, specialty, calendar_id, is_active),
         patients:patients(count),
         appointments:appointments(count)
       `)
@@ -67,9 +74,57 @@ export async function PATCH(
       return NextResponse.json({ error: `Грешка при обновяване: ${error.message}` }, { status: 500 })
     }
 
-    // Handle doctor update/create
-    if (body.doctor_name) {
-      // Check if doctor exists for this clinic
+    // Handle multiple doctors if provided
+    if (body.doctors && Array.isArray(body.doctors)) {
+      const doctorsList: DoctorInput[] = body.doctors.filter((d: any) => d.name?.trim())
+
+      if (doctorsList.length > 0) {
+        // Get existing doctors for this clinic
+        const { data: existingDoctors } = await supabase
+          .from('doctors')
+          .select('id')
+          .eq('clinic_id', id)
+
+        const existingIds = existingDoctors?.map(d => d.id) || []
+        const submittedIds = doctorsList.filter(d => d.id).map(d => d.id!)
+
+        // Doctors to delete (exist in DB but not in submitted list)
+        const toDelete = existingIds.filter(id => !submittedIds.includes(id))
+        if (toDelete.length > 0) {
+          await supabase
+            .from('doctors')
+            .delete()
+            .in('id', toDelete)
+        }
+
+        // Process each doctor
+        for (const doctor of doctorsList) {
+          if (doctor.id && existingIds.includes(doctor.id)) {
+            // Update existing doctor
+            await supabase
+              .from('doctors')
+              .update({
+                name: doctor.name.trim(),
+                specialty: doctor.specialty || 'Зъболекар',
+                calendar_id: doctor.calendar_id?.trim() || null
+              })
+              .eq('id', doctor.id)
+          } else {
+            // Create new doctor
+            await supabase
+              .from('doctors')
+              .insert({
+                clinic_id: id,
+                name: doctor.name.trim(),
+                specialty: doctor.specialty || 'Зъболекар',
+                calendar_id: doctor.calendar_id?.trim() || null,
+                is_active: true
+              })
+          }
+        }
+      }
+    } else if (body.doctor_name) {
+      // Backward compatibility: Handle single doctor update
       const { data: existingDoctor } = await supabase
         .from('doctors')
         .select('id')
@@ -78,7 +133,6 @@ export async function PATCH(
         .maybeSingle()
 
       if (existingDoctor) {
-        // Update existing doctor
         await supabase
           .from('doctors')
           .update({
@@ -87,7 +141,6 @@ export async function PATCH(
           })
           .eq('id', existingDoctor.id)
       } else {
-        // Create new doctor
         await supabase
           .from('doctors')
           .insert({

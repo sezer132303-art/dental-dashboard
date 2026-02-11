@@ -544,7 +544,7 @@ export default function CalendarPage() {
           onClick={() => setSelectedAppointment(null)}
         >
           <div
-            className="bg-white rounded-xl p-6 w-full max-w-md mx-4 shadow-2xl"
+            className="bg-white rounded-xl p-6 w-full max-w-md mx-4 shadow-2xl max-h-[90vh] overflow-y-auto"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between mb-6">
