@@ -58,6 +58,7 @@ export default function CalendarPage() {
   const [isClient, setIsClient] = useState(false)
   const [lastSync, setLastSync] = useState<Date | null>(null)
   const [syncing, setSyncing] = useState(false)
+  const [selectedDate, setSelectedDate] = useState<Date | null>(null)
 
   // Calculate Monday of the current week - only on client side
   const getMonday = (date: Date): Date => {
@@ -250,8 +251,10 @@ export default function CalendarPage() {
   }
 
   const goToDate = (date: Date) => {
-    const monday = getMonday(new Date(date.getFullYear(), date.getMonth(), date.getDate()))
-    setCurrentWeekStart(new Date(monday.getTime())) // Force new reference
+    const targetDate = new Date(date.getFullYear(), date.getMonth(), date.getDate())
+    const monday = getMonday(targetDate)
+    setSelectedDate(targetDate) // Track the selected date
+    setCurrentWeekStart(new Date(monday.getTime()))
     setShowDatePicker(false)
   }
 
@@ -291,6 +294,10 @@ export default function CalendarPage() {
   const isToday = (date: Date) => {
     const today = new Date()
     return formatDate(date) === formatDate(today)
+  }
+
+  const isSelectedDay = (date: Date) => {
+    return selectedDate && formatDate(date) === formatDate(selectedDate)
   }
 
   const formatPhone = (phone: string) => {
@@ -575,11 +582,17 @@ export default function CalendarPage() {
                   <div
                     key={i}
                     className={cn(
-                      'p-3 text-center text-sm font-medium border-r border-gray-100 last:border-r-0',
-                      isToday(day) ? 'bg-blue-50 text-blue-600' : 'text-gray-700'
+                      'p-3 text-center text-sm font-medium border-r border-gray-100 last:border-r-0 transition-colors',
+                      isToday(day) && 'bg-blue-50 text-blue-600',
+                      isSelectedDay(day) && !isToday(day) && 'bg-purple-50 text-purple-600 ring-2 ring-purple-400 ring-inset',
+                      isSelectedDay(day) && isToday(day) && 'ring-2 ring-blue-400 ring-inset',
+                      !isToday(day) && !isSelectedDay(day) && 'text-gray-700'
                     )}
                   >
                     {formatDayHeader(day)}
+                    {isSelectedDay(day) && (
+                      <div className="text-xs mt-0.5 opacity-75">избран</div>
+                    )}
                   </div>
                 ))}
               </div>
@@ -596,10 +609,14 @@ export default function CalendarPage() {
                     <div className="p-2 text-xs text-gray-400 border-r border-gray-100 flex items-start">
                       {hour}:00
                     </div>
-                    {weekDays.map((_, i) => (
+                    {weekDays.map((day, i) => (
                       <div
                         key={i}
-                        className="border-r border-gray-50 last:border-r-0"
+                        className={cn(
+                          'border-r border-gray-50 last:border-r-0',
+                          isSelectedDay(day) && !isToday(day) && 'bg-purple-50/30',
+                          isSelectedDay(day) && isToday(day) && 'bg-blue-50/50'
+                        )}
                       />
                     ))}
                   </div>
