@@ -1,0 +1,196 @@
+{
+  "name": "Google Calendar Sync",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 5
+            }
+          ]
+        }
+      },
+      "id": "schedule-trigger",
+      "name": "Every 5 Minutes",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [260, 300]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "https://dental-dashboard-nu.vercel.app/api/clinics",
+        "options": {}
+      },
+      "id": "get-clinics",
+      "name": "Get All Clinics",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [480, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "has-calendars",
+              "leftValue": "={{ $json.google_calendars }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "isNotEmpty"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "filter-calendars",
+      "name": "Has Calendar Config",
+      "type": "n8n-nodes-base.filter",
+      "typeVersion": 2,
+      "position": [700, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Parse calendar config and prepare for Google Calendar API\nconst clinic = $input.first().json;\nconst calendars = JSON.parse(clinic.google_calendars || '[]');\n\n// Get events from last sync or last 24 hours\nconst timeMin = new Date();\ntimeMin.setHours(timeMin.getHours() - 24);\n\nconst timeMax = new Date();\ntimeMax.setDate(timeMax.getDate() + 30); // Next 30 days\n\nreturn calendars.map(cal => ({\n  clinicId: clinic.id,\n  clinicName: clinic.name,\n  calendarId: cal.calendarId,\n  calendarName: cal.name,\n  doctorId: cal.doctorId || null,\n  timeMin: timeMin.toISOString(),\n  timeMax: timeMax.toISOString()\n}));"
+      },
+      "id": "parse-calendars",
+      "name": "Parse Calendar Config",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [920, 300]
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "calendar": {
+          "__rl": true,
+          "value": "={{ $json.calendarId }}",
+          "mode": "id"
+        },
+        "returnAll": false,
+        "limit": 100,
+        "options": {
+          "timeMax": "={{ $json.timeMax }}",
+          "timeMin": "={{ $json.timeMin }}"
+        }
+      },
+      "id": "google-calendar",
+      "name": "Get Calendar Events",
+      "type": "n8n-nodes-base.googleCalendar",
+      "typeVersion": 1.2,
+      "position": [1140, 300],
+      "credentials": {
+        "googleCalendarOAuth2Api": {
+          "id": "google-calendar-creds",
+          "name": "Google Calendar"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Transform Google Calendar events to appointments format\nconst events = $input.all();\nconst clinicId = $('Parse Calendar Config').first().json.clinicId;\nconst doctorId = $('Parse Calendar Config').first().json.doctorId;\n\nreturn events.map(event => {\n  const e = event.json;\n  \n  // Parse patient info from event title/description\n  let patientName = 'Неизвестен';\n  let patientPhone = null;\n  let appointmentType = 'Преглед';\n  \n  // Try to extract name from title (format: \"Name - Type\" or just \"Name\")\n  if (e.summary) {\n    const parts = e.summary.split(' - ');\n    patientName = parts[0].trim();\n    if (parts[1]) appointmentType = parts[1].trim();\n  }\n  \n  // Try to extract phone from description\n  if (e.description) {\n    const phoneMatch = e.description.match(/\\d{9,12}/);\n    if (phoneMatch) patientPhone = phoneMatch[0];\n  }\n  \n  return {\n    googleEventId: e.id,\n    clinicId,\n    doctorId,\n    patientName,\n    patientPhone,\n    appointmentType,\n    startTime: e.start?.dateTime || e.start?.date,\n    endTime: e.end?.dateTime || e.end?.date,\n    status: e.status === 'cancelled' ? 'cancelled' : 'scheduled',\n    source: 'google_calendar'\n  };\n});"
+      },
+      "id": "transform-events",
+      "name": "Transform to Appointments",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1360, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://dental-dashboard-nu.vercel.app/api/n8n/sync-calendar",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ appointments: $input.all().map(i => i.json) }) }}",
+        "options": {}
+      },
+      "id": "sync-appointments",
+      "name": "Sync to Dashboard",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1580, 300]
+    }
+  ],
+  "connections": {
+    "Every 5 Minutes": {
+      "main": [
+        [
+          {
+            "node": "Get All Clinics",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get All Clinics": {
+      "main": [
+        [
+          {
+            "node": "Has Calendar Config",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has Calendar Config": {
+      "main": [
+        [
+          {
+            "node": "Parse Calendar Config",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Calendar Config": {
+      "main": [
+        [
+          {
+            "node": "Get Calendar Events",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Calendar Events": {
+      "main": [
+        [
+          {
+            "node": "Transform to Appointments",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Transform to Appointments": {
+      "main": [
+        [
+          {
+            "node": "Sync to Dashboard",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}

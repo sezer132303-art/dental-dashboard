@@ -15,7 +15,7 @@ CREATE INDEX IF NOT EXISTS idx_appointments_source ON appointments(source);
 CREATE TABLE IF NOT EXISTS whatsapp_conversations (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     clinic_id UUID REFERENCES clinics(id) ON DELETE CASCADE,
-    patient_phone VARCHAR(20) NOT NULL,
+    patient_phone VARCHAR(50) NOT NULL,
     patient_id UUID REFERENCES patients(id) ON DELETE SET NULL,
     status VARCHAR(20) DEFAULT 'active',
     -- Status: active, resolved, booking_complete, cancelled

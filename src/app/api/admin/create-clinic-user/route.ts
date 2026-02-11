@@ -26,7 +26,7 @@ export async function POST(request: Request) {
     // Check if user already exists
     const { data: existingUser } = await supabase
       .from('users')
-      .select('id, is_active, clinic_id')
+      .select('id, phone, is_active, clinic_id')
       .eq('phone', normalizedPhone)
       .maybeSingle()
 
@@ -46,7 +46,9 @@ export async function POST(request: Request) {
       // User exists for a different/deleted clinic - free up the phone number
       // We can't delete due to potential foreign key constraints (appointments.created_by)
       // Instead, we'll update the old user's phone to a unique archived value
-      const archivedPhone = `archived_${Date.now()}_${existingUser.phone}`
+      // Format: X_{shortId}_{last6digits} to keep under 50 chars
+      const shortId = Date.now().toString(36) // base36 timestamp (shorter)
+      const archivedPhone = `X_${shortId}_${existingUser.phone.slice(-6)}`
       const { error: archiveError } = await supabase
         .from('users')
         .update({
