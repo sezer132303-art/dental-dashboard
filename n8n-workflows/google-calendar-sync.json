@@ -120,6 +120,15 @@
       "parameters": {
         "method": "POST",
         "url": "https://dental-dashboard-nu.vercel.app/api/n8n/sync-calendar",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-API-Key",
+              "value": "79d22dce33bd515d33124461ecb3202c27e660944ef29b2cb3cdf3396d37c6e4"
+            }
+          ]
+        },
         "sendBody": true,
         "specifyBody": "json",
         "jsonBody": "={{ JSON.stringify({ appointments: $input.all().map(i => i.json) }) }}",
