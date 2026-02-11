@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Building2, Plus, Search, Edit, Trash2, X } from 'lucide-react'
+import { Building2, Plus, Search, Edit, Trash2, X, User } from 'lucide-react'
 
 interface Clinic {
   id: string
@@ -25,7 +25,9 @@ export default function AdminClinicsPage() {
     whatsapp_instance: '',
     whatsapp_api_key: '',
     evolution_api_url: 'https://evo.settbg.com',
-    google_calendar_id: ''
+    google_calendar_id: '',
+    doctor_name: '',
+    doctor_specialty: 'Зъболекар'
   })
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
@@ -66,7 +68,9 @@ export default function AdminClinicsPage() {
       whatsapp_instance: '',
       whatsapp_api_key: '',
       evolution_api_url: 'https://evo.settbg.com',
-      google_calendar_id: ''
+      google_calendar_id: '',
+      doctor_name: '',
+      doctor_specialty: 'Зъболекар'
     })
     setShowModal(true)
   }
@@ -79,6 +83,8 @@ export default function AdminClinicsPage() {
       const response = await fetch(`/api/clinics/${clinic.id}`)
       if (response.ok) {
         const fullClinic = await response.json()
+        // Get first doctor if exists
+        const firstDoctor = fullClinic.doctors?.[0] || {}
         setFormData({
           name: fullClinic.name || '',
           address: fullClinic.address || '',
@@ -86,7 +92,9 @@ export default function AdminClinicsPage() {
           whatsapp_instance: fullClinic.whatsapp_instance || '',
           whatsapp_api_key: fullClinic.whatsapp_api_key || '',
           evolution_api_url: fullClinic.evolution_api_url || 'https://evo.settbg.com',
-          google_calendar_id: fullClinic.google_calendar_id || ''
+          google_calendar_id: fullClinic.google_calendar_id || '',
+          doctor_name: firstDoctor.name || '',
+          doctor_specialty: firstDoctor.specialty || 'Зъболекар'
         })
       } else {
         setFormData({
@@ -96,7 +104,9 @@ export default function AdminClinicsPage() {
           whatsapp_instance: clinic.whatsapp_instance || '',
           whatsapp_api_key: '',
           evolution_api_url: 'https://evo.settbg.com',
-          google_calendar_id: ''
+          google_calendar_id: '',
+          doctor_name: '',
+          doctor_specialty: 'Зъболекар'
         })
       }
     } catch {
@@ -107,7 +117,9 @@ export default function AdminClinicsPage() {
         whatsapp_instance: clinic.whatsapp_instance || '',
         whatsapp_api_key: '',
         evolution_api_url: 'https://evo.settbg.com',
-        google_calendar_id: ''
+        google_calendar_id: '',
+        doctor_name: '',
+        doctor_specialty: 'Зъболекар'
       })
     }
     setShowModal(true)
@@ -366,9 +378,44 @@ export default function AdminClinicsPage() {
                 </div>
               </div>
 
+              {/* Doctor Info */}
+              <div className="space-y-4">
+                <h3 className="font-medium text-gray-900 border-b pb-2">Лекар</h3>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Име на лекаря *
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.doctor_name}
+                    onChange={(e) => setFormData({ ...formData, doctor_name: e.target.value })}
+                    placeholder="д-р Иван Иванов"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-900"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Специалност
+                  </label>
+                  <select
+                    value={formData.doctor_specialty}
+                    onChange={(e) => setFormData({ ...formData, doctor_specialty: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-900"
+                  >
+                    <option value="Зъболекар">Зъболекар</option>
+                    <option value="Ортодонт">Ортодонт</option>
+                    <option value="Орален хирург">Орален хирург</option>
+                    <option value="Ендодонт">Ендодонт</option>
+                    <option value="Пародонтолог">Пародонтолог</option>
+                    <option value="Детски зъболекар">Детски зъболекар</option>
+                  </select>
+                </div>
+              </div>
+
               {/* Google Calendar */}
               <div className="space-y-4">
-                <h3 className="font-medium text-gray-900 border-b pb-2">Google Calendar</h3>
+                <h3 className="font-medium text-gray-900 border-b pb-2">Google Calendar на лекаря</h3>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
                     Calendar IDs (по един на ред)

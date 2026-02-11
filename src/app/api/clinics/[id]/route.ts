@@ -67,6 +67,38 @@ export async function PATCH(
       return NextResponse.json({ error: `Грешка при обновяване: ${error.message}` }, { status: 500 })
     }
 
+    // Handle doctor update/create
+    if (body.doctor_name) {
+      // Check if doctor exists for this clinic
+      const { data: existingDoctor } = await supabase
+        .from('doctors')
+        .select('id')
+        .eq('clinic_id', id)
+        .limit(1)
+        .maybeSingle()
+
+      if (existingDoctor) {
+        // Update existing doctor
+        await supabase
+          .from('doctors')
+          .update({
+            name: body.doctor_name,
+            specialty: body.doctor_specialty || 'Зъболекар'
+          })
+          .eq('id', existingDoctor.id)
+      } else {
+        // Create new doctor
+        await supabase
+          .from('doctors')
+          .insert({
+            clinic_id: id,
+            name: body.doctor_name,
+            specialty: body.doctor_specialty || 'Зъболекар',
+            is_active: true
+          })
+      }
+    }
+
     return NextResponse.json(clinic)
   } catch (error) {
     console.error('Update clinic API error:', error)
