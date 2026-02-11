@@ -1,8 +1,9 @@
 'use client'
 
-import { useEffect, useState, useRef } from 'react'
-import { ChevronLeft, ChevronRight, Loader2, Clock, User, CalendarDays, X, Phone, Stethoscope, Check, XCircle, Edit3, Save, MessageSquare } from 'lucide-react'
+import { useEffect, useState, useRef, useCallback } from 'react'
+import { ChevronLeft, ChevronRight, Loader2, Clock, User, CalendarDays, X, Phone, Stethoscope, Check, XCircle, Edit3, Save, MessageSquare, RefreshCw } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { getSupabase } from '@/lib/supabase'
 
 interface Doctor {
   id: string
@@ -47,19 +48,33 @@ export default function CalendarPage() {
   const [loading, setLoading] = useState(true)
   const [selectedDoctor, setSelectedDoctor] = useState<Doctor | null>(null)
   const [showDatePicker, setShowDatePicker] = useState(false)
-  const [pickerMonth, setPickerMonth] = useState(new Date())
+  const [pickerMonth, setPickerMonth] = useState<Date | null>(null)
   const [selectedAppointment, setSelectedAppointment] = useState<Appointment | null>(null)
   const [isEditing, setIsEditing] = useState(false)
   const [editForm, setEditForm] = useState({ status: '', type: '', notes: '' })
   const [saving, setSaving] = useState(false)
   const datePickerRef = useRef<HTMLDivElement>(null)
-  const [currentWeekStart, setCurrentWeekStart] = useState<Date>(() => {
-    const now = new Date()
-    const dayOfWeek = now.getDay()
+  const [currentWeekStart, setCurrentWeekStart] = useState<Date | null>(null)
+  const [isClient, setIsClient] = useState(false)
+  const [lastSync, setLastSync] = useState<Date | null>(null)
+  const [syncing, setSyncing] = useState(false)
+
+  // Calculate Monday of the current week - only on client side
+  const getMonday = (date: Date): Date => {
+    const d = new Date(date.getFullYear(), date.getMonth(), date.getDate())
+    const dayOfWeek = d.getDay()
     const daysFromMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1
-    const monday = new Date(now.getFullYear(), now.getMonth(), now.getDate() - daysFromMonday)
-    return monday
-  })
+    d.setDate(d.getDate() - daysFromMonday)
+    return d
+  }
+
+  // Initialize on client side only to avoid SSR timezone issues
+  useEffect(() => {
+    const now = new Date()
+    setIsClient(true)
+    setCurrentWeekStart(getMonday(now))
+    setPickerMonth(new Date(now.getFullYear(), now.getMonth(), 1))
+  }, [])
 
   // Close date picker when clicking outside
   useEffect(() => {
@@ -91,41 +106,98 @@ export default function CalendarPage() {
     fetchDoctors()
   }, [])
 
+  // Helper function to format date (needed before useCallback)
+  const formatDateHelper = (date: Date) => {
+    const year = date.getFullYear()
+    const month = String(date.getMonth() + 1).padStart(2, '0')
+    const day = String(date.getDate()).padStart(2, '0')
+    return `${year}-${month}-${day}`
+  }
+
+  const addDaysHelper = (date: Date, days: number) => {
+    const result = new Date(date)
+    result.setDate(result.getDate() + days)
+    return result
+  }
+
+  // Fetch appointments function
+  const fetchAppointments = useCallback(async (weekStart: Date, doctor: Doctor | null, showLoadingState = true) => {
+    try {
+      if (showLoadingState) setLoading(true)
+      const startDate = formatDateHelper(weekStart)
+      const endDate = formatDateHelper(addDaysHelper(weekStart, 6))
+
+      const params = new URLSearchParams({
+        startDate,
+        endDate
+      })
+
+      if (doctor) {
+        params.append('doctorId', doctor.id)
+      }
+
+      const response = await fetch(`/api/appointments?${params.toString()}`)
+      const data = await response.json()
+
+      if (data.appointments) {
+        setAppointments(data.appointments)
+        setLastSync(new Date())
+      }
+    } catch (err) {
+      console.error('Error fetching appointments:', err)
+    } finally {
+      if (showLoadingState) setLoading(false)
+    }
+  }, [])
+
   // Fetch appointments for the week
   useEffect(() => {
-    const fetchAppointments = async () => {
-      try {
-        setLoading(true)
-        const startDate = formatDate(currentWeekStart)
-        const endDate = formatDate(addDays(currentWeekStart, 6))
+    if (!currentWeekStart) return
+    fetchAppointments(currentWeekStart, selectedDoctor)
+  }, [currentWeekStart, selectedDoctor, fetchAppointments])
 
-        const params = new URLSearchParams({
-          startDate,
-          endDate
-        })
+  // Real-time subscription for appointments
+  useEffect(() => {
+    if (!currentWeekStart) return
 
-        if (selectedDoctor) {
-          params.append('doctorId', selectedDoctor.id)
+    const supabase = getSupabase()
+
+    // Subscribe to appointment changes
+    const channel = supabase
+      .channel('appointments-changes')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'appointments'
+        },
+        (payload) => {
+          console.log('Appointment change detected:', payload)
+          // Refetch appointments when any change occurs
+          fetchAppointments(currentWeekStart, selectedDoctor, false)
         }
+      )
+      .subscribe()
 
-        const response = await fetch(`/api/appointments?${params.toString()}`)
-        const data = await response.json()
-
-        if (data.appointments) {
-          setAppointments(data.appointments)
-        }
-      } catch (err) {
-        console.error('Error fetching appointments:', err)
-      } finally {
-        setLoading(false)
-      }
+    return () => {
+      supabase.removeChannel(channel)
     }
+  }, [currentWeekStart, selectedDoctor, fetchAppointments])
 
-    fetchAppointments()
-  }, [currentWeekStart, selectedDoctor])
+  // Manual refresh function
+  const handleManualRefresh = async () => {
+    if (!currentWeekStart || syncing) return
+    setSyncing(true)
+    await fetchAppointments(currentWeekStart, selectedDoctor, false)
+    setSyncing(false)
+  }
 
   const formatDate = (date: Date) => {
-    return date.toISOString().split('T')[0]
+    const year = date.getFullYear()
+    const month = String(date.getMonth() + 1).padStart(2, '0')
+    const day = String(date.getDate()).padStart(2, '0')
+    return `${year}-${month}-${day}`
   }
 
   const addDays = (date: Date, days: number) => {
@@ -135,6 +207,7 @@ export default function CalendarPage() {
   }
 
   const getWeekDays = () => {
+    if (!currentWeekStart) return []
     return Array.from({ length: 7 }, (_, i) => addDays(currentWeekStart, i))
   }
 
@@ -161,20 +234,15 @@ export default function CalendarPage() {
   }
 
   const prevWeek = () => {
-    setCurrentWeekStart(addDays(currentWeekStart, -7))
+    if (currentWeekStart) {
+      setCurrentWeekStart(addDays(currentWeekStart, -7))
+    }
   }
 
   const nextWeek = () => {
-    setCurrentWeekStart(addDays(currentWeekStart, 7))
-  }
-
-  const getMonday = (date: Date): Date => {
-    const d = new Date(date.getFullYear(), date.getMonth(), date.getDate())
-    const dayOfWeek = d.getDay()
-    // Convert Sunday (0) to 7 for easier calculation
-    const daysFromMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1
-    d.setDate(d.getDate() - daysFromMonday)
-    return d
+    if (currentWeekStart) {
+      setCurrentWeekStart(addDays(currentWeekStart, 7))
+    }
   }
 
   const goToToday = () => {
@@ -208,11 +276,15 @@ export default function CalendarPage() {
   }
 
   const prevPickerMonth = () => {
-    setPickerMonth(new Date(pickerMonth.getFullYear(), pickerMonth.getMonth() - 1, 1))
+    if (pickerMonth) {
+      setPickerMonth(new Date(pickerMonth.getFullYear(), pickerMonth.getMonth() - 1, 1))
+    }
   }
 
   const nextPickerMonth = () => {
-    setPickerMonth(new Date(pickerMonth.getFullYear(), pickerMonth.getMonth() + 1, 1))
+    if (pickerMonth) {
+      setPickerMonth(new Date(pickerMonth.getFullYear(), pickerMonth.getMonth() + 1, 1))
+    }
   }
 
   const isToday = (date: Date) => {
@@ -304,8 +376,38 @@ export default function CalendarPage() {
     apt => apt.appointment_date === formatDate(new Date())
   ).length
 
+  // Show loading while initializing client-side date
+  if (!currentWeekStart) {
+    return (
+      <div className="flex items-center justify-center h-[600px]">
+        <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
+      </div>
+    )
+  }
+
   return (
     <div className="space-y-6">
+      {/* Sync Status Bar */}
+      <div className="flex items-center justify-between bg-green-50 border border-green-200 rounded-lg px-4 py-2">
+        <div className="flex items-center gap-2 text-sm text-green-700">
+          <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
+          <span>Автоматична синхронизация с Google Calendar</span>
+          {lastSync && (
+            <span className="text-green-600">
+              (последно: {lastSync.toLocaleTimeString('bg-BG')})
+            </span>
+          )}
+        </div>
+        <button
+          onClick={handleManualRefresh}
+          disabled={syncing}
+          className="flex items-center gap-1 px-3 py-1 text-sm text-green-700 hover:bg-green-100 rounded-lg transition disabled:opacity-50"
+        >
+          <RefreshCw className={cn('w-4 h-4', syncing && 'animate-spin')} />
+          {syncing ? 'Синхронизиране...' : 'Обнови'}
+        </button>
+      </div>
+
       {/* Doctor Selection */}
       <div className="flex flex-wrap gap-2">
         <button
@@ -374,7 +476,7 @@ export default function CalendarPage() {
           </button>
 
           {/* Date Picker Dropdown */}
-          {showDatePicker && (
+          {showDatePicker && pickerMonth && (
             <div className="absolute top-full left-1/2 -translate-x-1/2 mt-2 bg-white rounded-xl shadow-lg border border-gray-200 p-4 z-50 w-72">
               {/* Month Navigation */}
               <div className="flex items-center justify-between mb-4">

@@ -21,14 +21,24 @@
     {
       "parameters": {
         "method": "GET",
-        "url": "https://dental-dashboard-nu.vercel.app/api/clinics",
+        "url": "https://dental-dashboard-nu.vercel.app/api/doctors",
         "options": {}
       },
-      "id": "get-clinics",
-      "name": "Get All Clinics",
+      "id": "get-doctors",
+      "name": "Get All Doctors",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [480, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Extract doctors array from API response\n// API returns { \"doctors\": [...] }\nconst response = $input.first().json;\nconst doctors = response.doctors || [];\n\n// Return each doctor as a separate item\nreturn doctors.map(doctor => ({ json: doctor }));"
+      },
+      "id": "extract-doctors",
+      "name": "Extract Doctors Array",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [590, 300]
     },
     {
       "parameters": {
@@ -41,7 +51,7 @@
           "conditions": [
             {
               "id": "has-calendar",
-              "leftValue": "={{ $json.google_calendar_id }}",
+              "leftValue": "={{ $json.calendar_id }}",
               "rightValue": "",
               "operator": {
                 "type": "string",
@@ -54,20 +64,20 @@
         "options": {}
       },
       "id": "filter-calendars",
-      "name": "Has Calendar Config",
+      "name": "Has Calendar ID",
       "type": "n8n-nodes-base.filter",
       "typeVersion": 2,
-      "position": [700, 300]
+      "position": [810, 300]
     },
     {
       "parameters": {
-        "jsCode": "// Prepare for Google Calendar API - handle multiple calendar IDs\nconst clinic = $input.first().json;\n\n// Get events from last 24 hours to next 30 days\nconst timeMin = new Date();\ntimeMin.setHours(timeMin.getHours() - 24);\n\nconst timeMax = new Date();\ntimeMax.setDate(timeMax.getDate() + 30);\n\n// Split by newlines and filter empty lines\nconst calendarIds = (clinic.google_calendar_id || '').split('\\n').map(id => id.trim()).filter(id => id.length > 0);\n\nreturn calendarIds.map(calendarId => ({\n  clinicId: clinic.id,\n  clinicName: clinic.name,\n  calendarId: calendarId,\n  timeMin: timeMin.toISOString(),\n  timeMax: timeMax.toISOString()\n}));"
+        "jsCode": "// Prepare for Google Calendar API - per doctor\nconst doctors = $input.all();\n\n// Get events from last 24 hours to next 30 days\nconst timeMin = new Date();\ntimeMin.setHours(timeMin.getHours() - 24);\n\nconst timeMax = new Date();\ntimeMax.setDate(timeMax.getDate() + 30);\n\nreturn doctors.map(doc => ({\n  json: {\n    doctorId: doc.json.id,\n    doctorName: doc.json.name,\n    clinicId: doc.json.clinic_id,\n    calendarId: doc.json.calendar_id,\n    timeMin: timeMin.toISOString(),\n    timeMax: timeMax.toISOString()\n  }\n}));"
       },
-      "id": "parse-calendars",
+      "id": "prepare-query",
       "name": "Prepare Calendar Query",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [920, 300]
+      "position": [1030, 300]
     },
     {
       "parameters": {
@@ -88,7 +98,7 @@
       "name": "Get Calendar Events",
       "type": "n8n-nodes-base.googleCalendar",
       "typeVersion": 1.2,
-      "position": [1140, 300],
+      "position": [1250, 300],
       "credentials": {
         "googleCalendarOAuth2Api": {
           "id": "google-calendar-creds",
@@ -98,13 +108,13 @@
     },
     {
       "parameters": {
-        "jsCode": "// Transform Google Calendar events to appointments format\nconst events = $input.all();\nconst clinicId = $('Prepare Calendar Query').first().json.clinicId;\n\nreturn events.map(event => {\n  const e = event.json;\n  \n  // Parse patient info from event title/description\n  let patientName = 'Неизвестен';\n  let patientPhone = null;\n  let appointmentType = 'Преглед';\n  \n  // Try to extract name from title (format: \"Name - Type\" or just \"Name\")\n  if (e.summary) {\n    const parts = e.summary.split(' - ');\n    patientName = parts[0].trim();\n    if (parts[1]) appointmentType = parts[1].trim();\n  }\n  \n  // Try to extract phone from description\n  if (e.description) {\n    const phoneMatch = e.description.match(/\\d{9,12}/);\n    if (phoneMatch) patientPhone = phoneMatch[0];\n  }\n  \n  return {\n    googleEventId: e.id,\n    clinicId,\n    patientName,\n    patientPhone,\n    appointmentType,\n    startTime: e.start?.dateTime || e.start?.date,\n    endTime: e.end?.dateTime || e.end?.date,\n    status: e.status === 'cancelled' ? 'cancelled' : 'scheduled',\n    source: 'google_calendar'\n  };\n});"
+        "jsCode": "// Transform Google Calendar events to appointments format\nconst events = $input.all();\nconst queryData = $('Prepare Calendar Query').first().json;\n\nreturn events.map(event => {\n  const e = event.json;\n  \n  // Parse patient info from event title/description\n  let patientName = 'Неизвестен';\n  let patientPhone = null;\n  let appointmentType = 'Преглед';\n  \n  // Try to extract name from title (format: \"Name - Type\" or just \"Name\")\n  if (e.summary) {\n    const parts = e.summary.split(' - ');\n    patientName = parts[0].trim();\n    if (parts[1]) appointmentType = parts[1].trim();\n  }\n  \n  // Try to extract phone from description\n  if (e.description) {\n    const phoneMatch = e.description.match(/\\d{9,12}/);\n    if (phoneMatch) patientPhone = phoneMatch[0];\n  }\n  \n  return {\n    json: {\n      googleEventId: e.id,\n      clinicId: queryData.clinicId,\n      doctorId: queryData.doctorId,\n      patientName,\n      patientPhone,\n      appointmentType,\n      startTime: e.start?.dateTime || e.start?.date,\n      endTime: e.end?.dateTime || e.end?.date,\n      status: e.status === 'cancelled' ? 'cancelled' : 'scheduled',\n      source: 'google_calendar'\n    }\n  };\n});"
       },
       "id": "transform-events",
       "name": "Transform to Appointments",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [1360, 300]
+      "position": [1470, 300]
     },
     {
       "parameters": {
@@ -119,7 +129,7 @@
       "name": "Sync to Dashboard",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [1580, 300]
+      "position": [1690, 300]
     }
   ],
   "connections": {
@@ -127,25 +137,36 @@
       "main": [
         [
           {
-            "node": "Get All Clinics",
+            "node": "Get All Doctors",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Get All Clinics": {
+    "Get All Doctors": {
       "main": [
         [
           {
-            "node": "Has Calendar Config",
+            "node": "Extract Doctors Array",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Has Calendar Config": {
+    "Extract Doctors Array": {
+      "main": [
+        [
+          {
+            "node": "Has Calendar ID",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has Calendar ID": {
       "main": [
         [
           {

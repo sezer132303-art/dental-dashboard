@@ -125,13 +125,36 @@ export async function POST(request: NextRequest) {
           continue
         }
 
-        // Parse date and time
+        // Parse date and time - use consistent timezone handling
         const startDate = new Date(apt.startTime)
         const endDate = new Date(apt.endTime)
 
-        const appointmentDate = startDate.toISOString().split('T')[0]
-        const startTime = startDate.toTimeString().slice(0, 5)
-        const endTime = endDate.toTimeString().slice(0, 5)
+        // Format date in local timezone (not UTC) to avoid day shifts
+        const formatLocalDate = (date: Date) => {
+          const year = date.getFullYear()
+          const month = String(date.getMonth() + 1).padStart(2, '0')
+          const day = String(date.getDate()).padStart(2, '0')
+          return `${year}-${month}-${day}`
+        }
+
+        const formatLocalTime = (date: Date) => {
+          const hours = String(date.getHours()).padStart(2, '0')
+          const minutes = String(date.getMinutes()).padStart(2, '0')
+          return `${hours}:${minutes}`
+        }
+
+        const appointmentDate = formatLocalDate(startDate)
+        const startTime = formatLocalTime(startDate)
+        const endTime = formatLocalTime(endDate)
+
+        // Debug logging
+        console.log('Sync appointment:', {
+          originalStartTime: apt.startTime,
+          parsedDate: startDate.toString(),
+          appointmentDate,
+          startTime,
+          endTime
+        })
 
         // Create appointment
         const { error: insertError } = await supabase
