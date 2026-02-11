@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase'
+import bcrypt from 'bcryptjs'
 
 interface DoctorInput {
   id?: string
@@ -32,7 +33,18 @@ export async function GET(
       return NextResponse.json({ error: 'Клиниката не е намерена' }, { status: 404 })
     }
 
-    return NextResponse.json(clinic)
+    // Get admin user for this clinic
+    const { data: adminUser } = await supabase
+      .from('users')
+      .select('id, phone, name')
+      .eq('clinic_id', id)
+      .eq('role', 'clinic')
+      .maybeSingle()
+
+    return NextResponse.json({
+      ...clinic,
+      admin: adminUser || null
+    })
   } catch (error) {
     console.error('Clinic API error:', error)
     return NextResponse.json({ error: 'Неочаквана грешка' }, { status: 500 })
@@ -72,6 +84,40 @@ export async function PATCH(
     if (error) {
       console.error('Update clinic error:', error)
       return NextResponse.json({ error: `Грешка при обновяване: ${error.message}` }, { status: 500 })
+    }
+
+    // Handle admin user updates
+    if (body.admin_name || body.admin_password) {
+      // Find existing admin user
+      const { data: adminUser } = await supabase
+        .from('users')
+        .select('id')
+        .eq('clinic_id', id)
+        .eq('role', 'clinic')
+        .maybeSingle()
+
+      if (adminUser) {
+        const adminUpdate: Record<string, any> = {}
+
+        if (body.admin_name?.trim()) {
+          adminUpdate.name = body.admin_name.trim()
+        }
+
+        if (body.admin_password && body.admin_password.length >= 6) {
+          adminUpdate.password_hash = await bcrypt.hash(body.admin_password, 10)
+        }
+
+        if (Object.keys(adminUpdate).length > 0) {
+          const { error: adminError } = await supabase
+            .from('users')
+            .update(adminUpdate)
+            .eq('id', adminUser.id)
+
+          if (adminError) {
+            console.error('Update admin error:', adminError)
+          }
+        }
+      }
     }
 
     // Handle multiple doctors if provided
@@ -174,6 +220,13 @@ export async function DELETE(
   try {
     const { id } = await params
     const supabase = createServerSupabaseClient()
+
+    // Delete admin users associated with this clinic
+    await supabase
+      .from('users')
+      .delete()
+      .eq('clinic_id', id)
+      .eq('role', 'clinic')
 
     const { error } = await supabase
       .from('clinics')

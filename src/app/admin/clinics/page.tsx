@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Building2, Plus, Search, Edit, Trash2, X, User, Calendar } from 'lucide-react'
+import { Building2, Plus, Search, Edit, Trash2, X, User, Calendar, Key, Phone } from 'lucide-react'
 
 interface Clinic {
   id: string
@@ -38,7 +38,11 @@ export default function AdminClinicsPage() {
     whatsapp_instance: '',
     whatsapp_api_key: '',
     evolution_api_url: 'https://evo.settbg.com',
-    google_calendar_id: ''
+    google_calendar_id: '',
+    // Admin user fields
+    admin_phone: '',
+    admin_password: '',
+    admin_name: ''
   })
   const [doctors, setDoctors] = useState<DoctorEntry[]>([{ ...emptyDoctor }])
   const [saving, setSaving] = useState(false)
@@ -80,7 +84,10 @@ export default function AdminClinicsPage() {
       whatsapp_instance: '',
       whatsapp_api_key: '',
       evolution_api_url: 'https://evo.settbg.com',
-      google_calendar_id: ''
+      google_calendar_id: '',
+      admin_phone: '',
+      admin_password: '',
+      admin_name: ''
     })
     setDoctors([{ ...emptyDoctor }])
     setShowModal(true)
@@ -100,7 +107,10 @@ export default function AdminClinicsPage() {
           whatsapp_instance: fullClinic.whatsapp_instance || '',
           whatsapp_api_key: fullClinic.whatsapp_api_key || '',
           evolution_api_url: fullClinic.evolution_api_url || 'https://evo.settbg.com',
-          google_calendar_id: fullClinic.google_calendar_id || ''
+          google_calendar_id: fullClinic.google_calendar_id || '',
+          admin_phone: fullClinic.admin?.phone || '',
+          admin_password: '',
+          admin_name: fullClinic.admin?.name || ''
         })
         // Load existing doctors
         if (fullClinic.doctors && fullClinic.doctors.length > 0) {
@@ -121,7 +131,10 @@ export default function AdminClinicsPage() {
           whatsapp_instance: clinic.whatsapp_instance || '',
           whatsapp_api_key: '',
           evolution_api_url: 'https://evo.settbg.com',
-          google_calendar_id: ''
+          google_calendar_id: '',
+          admin_phone: '',
+          admin_password: '',
+          admin_name: ''
         })
         setDoctors([{ ...emptyDoctor }])
       }
@@ -133,7 +146,10 @@ export default function AdminClinicsPage() {
         whatsapp_instance: clinic.whatsapp_instance || '',
         whatsapp_api_key: '',
         evolution_api_url: 'https://evo.settbg.com',
-        google_calendar_id: ''
+        google_calendar_id: '',
+        admin_phone: '',
+        admin_password: '',
+        admin_name: ''
       })
       setDoctors([{ ...emptyDoctor }])
     }
@@ -167,6 +183,25 @@ export default function AdminClinicsPage() {
       setError('Моля, добавете поне един лекар')
       setSaving(false)
       return
+    }
+
+    // Validate admin fields for new clinic
+    if (!editingClinic) {
+      if (!formData.admin_name.trim()) {
+        setError('Моля, въведете име на администратора')
+        setSaving(false)
+        return
+      }
+      if (!formData.admin_phone.trim()) {
+        setError('Моля, въведете телефон за вход')
+        setSaving(false)
+        return
+      }
+      if (!formData.admin_password || formData.admin_password.length < 6) {
+        setError('Паролата трябва да е поне 6 символа')
+        setSaving(false)
+        return
+      }
     }
 
     try {
@@ -386,6 +421,75 @@ export default function AdminClinicsPage() {
                     placeholder="+359 2 123 4567"
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-900"
                   />
+                </div>
+              </div>
+
+              {/* Admin Account Section */}
+              <div className="space-y-4">
+                <h3 className="font-medium text-gray-900 border-b pb-2 flex items-center gap-2">
+                  <Key className="w-4 h-4" />
+                  Администраторски акаунт
+                </h3>
+                <p className="text-sm text-gray-500">
+                  {editingClinic
+                    ? 'Редактирайте данните за вход на собственика на клиниката.'
+                    : 'Създайте акаунт за собственика на клиниката, с който ще влиза в системата.'
+                  }
+                </p>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Име на администратора *
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.admin_name}
+                    onChange={(e) => setFormData({ ...formData, admin_name: e.target.value })}
+                    placeholder="Иван Иванов"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-900"
+                    required
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      <span className="flex items-center gap-1">
+                        <Phone className="w-3 h-3" />
+                        Телефон за вход *
+                      </span>
+                    </label>
+                    <input
+                      type="tel"
+                      value={formData.admin_phone}
+                      onChange={(e) => setFormData({ ...formData, admin_phone: e.target.value })}
+                      placeholder="0888 123 456"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-900"
+                      required={!editingClinic}
+                      disabled={!!editingClinic}
+                    />
+                    {editingClinic && (
+                      <p className="text-xs text-gray-400 mt-1">Телефонът не може да се променя</p>
+                    )}
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      <span className="flex items-center gap-1">
+                        <Key className="w-3 h-3" />
+                        {editingClinic ? 'Нова парола' : 'Парола *'}
+                      </span>
+                    </label>
+                    <input
+                      type="password"
+                      value={formData.admin_password}
+                      onChange={(e) => setFormData({ ...formData, admin_password: e.target.value })}
+                      placeholder={editingClinic ? 'Оставете празно за без промяна' : 'Минимум 6 символа'}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-900"
+                      required={!editingClinic}
+                      minLength={6}
+                    />
+                    {editingClinic && (
+                      <p className="text-xs text-gray-400 mt-1">Оставете празно, ако не искате да сменяте паролата</p>
+                    )}
+                  </div>
                 </div>
               </div>
 

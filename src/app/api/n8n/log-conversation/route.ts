@@ -15,6 +15,7 @@ export async function POST(request: NextRequest) {
 
     const {
       clinicId,
+      instanceName,      // WhatsApp instance name from Evolution API
       patientPhone,
       direction,         // 'inbound' or 'outbound'
       content,
@@ -31,7 +32,25 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const effectiveClinicId = clinicId || getDefaultClinicId()
+    // Determine clinic ID: explicit > by instance name > default
+    let effectiveClinicId = clinicId
+
+    if (!effectiveClinicId && instanceName) {
+      // Look up clinic by WhatsApp instance name
+      const { data: clinic } = await supabase
+        .from('clinics')
+        .select('id')
+        .eq('whatsapp_instance', instanceName)
+        .single()
+
+      if (clinic) {
+        effectiveClinicId = clinic.id
+      }
+    }
+
+    if (!effectiveClinicId) {
+      effectiveClinicId = getDefaultClinicId()
+    }
 
     // Normalize phone number
     let normalizedPhone = patientPhone.replace(/\D/g, '')

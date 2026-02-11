@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase'
+import bcrypt from 'bcryptjs'
 
 interface DoctorInput {
   id?: string
@@ -51,11 +52,21 @@ export async function POST(request: Request) {
     const body = await request.json()
     const {
       name, address, phone, whatsapp_instance, whatsapp_api_key,
-      evolution_api_url, google_calendar_id, doctors
+      evolution_api_url, google_calendar_id, doctors,
+      admin_phone, admin_password, admin_name
     } = body
 
     if (!name) {
       return NextResponse.json({ error: 'Името е задължително' }, { status: 400 })
+    }
+
+    // Validate admin fields
+    if (!admin_phone || !admin_password || !admin_name) {
+      return NextResponse.json({ error: 'Данните за администратор са задължителни' }, { status: 400 })
+    }
+
+    if (admin_password.length < 6) {
+      return NextResponse.json({ error: 'Паролата трябва да е поне 6 символа' }, { status: 400 })
     }
 
     // Support both old format (doctor_name) and new format (doctors array)
@@ -74,6 +85,25 @@ export async function POST(request: Request) {
 
     const supabase = createServerSupabaseClient()
 
+    // Normalize admin phone number
+    let normalizedPhone = admin_phone.replace(/[\s\-\+]/g, '')
+    if (normalizedPhone.startsWith('0')) {
+      normalizedPhone = '359' + normalizedPhone.slice(1)
+    } else if (!normalizedPhone.startsWith('359')) {
+      normalizedPhone = '359' + normalizedPhone
+    }
+
+    // Check if phone is already registered
+    const { data: existingUser } = await supabase
+      .from('users')
+      .select('id')
+      .eq('phone', normalizedPhone)
+      .single()
+
+    if (existingUser) {
+      return NextResponse.json({ error: 'Този телефонен номер вече е регистриран' }, { status: 400 })
+    }
+
     // Create clinic
     const insertData: Record<string, any> = { name }
     if (address) insertData.address = address
@@ -91,7 +121,29 @@ export async function POST(request: Request) {
 
     if (error) {
       console.error('Create clinic error:', error)
-      return NextResponse.json({ error: 'Грешка при създаване' }, { status: 500 })
+      return NextResponse.json({ error: 'Грешка при създаване на клиника' }, { status: 500 })
+    }
+
+    // Hash password and create admin user
+    const passwordHash = await bcrypt.hash(admin_password, 10)
+    const { data: adminUser, error: userError } = await supabase
+      .from('users')
+      .insert({
+        phone: normalizedPhone,
+        name: admin_name.trim(),
+        role: 'clinic',
+        clinic_id: clinic.id,
+        is_active: true,
+        password_hash: passwordHash
+      })
+      .select()
+      .single()
+
+    if (userError) {
+      console.error('Create admin user error:', userError)
+      // Delete the clinic if user creation fails
+      await supabase.from('clinics').delete().eq('id', clinic.id)
+      return NextResponse.json({ error: 'Грешка при създаване на администратор' }, { status: 500 })
     }
 
     // Create doctors for this clinic
@@ -115,7 +167,14 @@ export async function POST(request: Request) {
       }
     }
 
-    return NextResponse.json(clinic)
+    return NextResponse.json({
+      ...clinic,
+      admin: {
+        id: adminUser.id,
+        phone: adminUser.phone,
+        name: adminUser.name
+      }
+    })
   } catch (error) {
     console.error('Create clinic API error:', error)
     return NextResponse.json({ error: 'Неочаквана грешка' }, { status: 500 })

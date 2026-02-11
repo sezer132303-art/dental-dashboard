@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState, useRef, useCallback } from 'react'
-import { ChevronLeft, ChevronRight, Loader2, Clock, User, CalendarDays, X, Phone, Stethoscope, Check, XCircle, Edit3, Save, MessageSquare, RefreshCw } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Loader2, Clock, User, CalendarDays, X, Phone, Stethoscope, Check, XCircle, Edit3, Save, MessageSquare, RefreshCw, List, Grid3X3 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { getSupabase } from '@/lib/supabase'
 
@@ -59,6 +59,9 @@ export default function CalendarPage() {
   const [lastSync, setLastSync] = useState<Date | null>(null)
   const [syncing, setSyncing] = useState(false)
   const [selectedDate, setSelectedDate] = useState<Date | null>(null)
+  const [viewMode, setViewMode] = useState<'week' | 'list'>('week')
+  const [allAppointments, setAllAppointments] = useState<Appointment[]>([])
+  const [loadingAll, setLoadingAll] = useState(false)
 
   // Calculate Monday of the current week - only on client side
   const getMonday = (date: Date): Date => {
@@ -186,13 +189,70 @@ export default function CalendarPage() {
     }
   }, [currentWeekStart, selectedDoctor, fetchAppointments])
 
-  // Manual refresh function
+  // Manual refresh function - triggers Google Calendar sync
   const handleManualRefresh = async () => {
     if (!currentWeekStart || syncing) return
     setSyncing(true)
-    await fetchAppointments(currentWeekStart, selectedDoctor, false)
+
+    try {
+      // Trigger Google Calendar sync via n8n
+      const syncResponse = await fetch('/api/calendar/sync', { method: 'POST' })
+
+      if (!syncResponse.ok) {
+        console.error('Calendar sync failed')
+      }
+
+      // Wait a moment for sync to complete, then fetch updated appointments
+      await new Promise(resolve => setTimeout(resolve, 2000))
+      await fetchAppointments(currentWeekStart, selectedDoctor, false)
+    } catch (error) {
+      console.error('Sync error:', error)
+      // Still try to fetch appointments even if sync fails
+      await fetchAppointments(currentWeekStart, selectedDoctor, false)
+    }
+
     setSyncing(false)
   }
+
+  // Fetch all upcoming appointments for list view
+  const fetchAllAppointments = useCallback(async () => {
+    try {
+      setLoadingAll(true)
+      const today = new Date()
+      const startDate = formatDateHelper(today)
+      // Get appointments for next 60 days
+      const endDate = formatDateHelper(addDaysHelper(today, 60))
+
+      const params = new URLSearchParams({ startDate, endDate })
+      if (selectedDoctor) {
+        params.append('doctorId', selectedDoctor.id)
+      }
+
+      const response = await fetch(`/api/appointments?${params.toString()}`)
+      const data = await response.json()
+
+      if (data.appointments) {
+        // Sort by date and time
+        const sorted = data.appointments.sort((a: Appointment, b: Appointment) => {
+          const dateCompare = a.appointment_date.localeCompare(b.appointment_date)
+          if (dateCompare !== 0) return dateCompare
+          return a.start_time.localeCompare(b.start_time)
+        })
+        setAllAppointments(sorted)
+      }
+    } catch (err) {
+      console.error('Error fetching all appointments:', err)
+    } finally {
+      setLoadingAll(false)
+    }
+  }, [selectedDoctor])
+
+  // Fetch all appointments when switching to list view
+  useEffect(() => {
+    if (viewMode === 'list') {
+      fetchAllAppointments()
+    }
+  }, [viewMode, selectedDoctor, fetchAllAppointments])
 
   const formatDate = (date: Date) => {
     const year = date.getFullYear()
@@ -443,9 +503,38 @@ export default function CalendarPage() {
             {doctor.name}
           </button>
         ))}
+
+        {/* View Mode Toggle */}
+        <div className="ml-auto flex items-center gap-1 bg-gray-100 rounded-lg p-1">
+          <button
+            onClick={() => setViewMode('week')}
+            className={cn(
+              'flex items-center gap-1 px-3 py-1.5 rounded-md text-sm font-medium transition-colors',
+              viewMode === 'week'
+                ? 'bg-white text-blue-600 shadow-sm'
+                : 'text-gray-600 hover:text-gray-900'
+            )}
+          >
+            <Grid3X3 className="w-4 h-4" />
+            Седмица
+          </button>
+          <button
+            onClick={() => setViewMode('list')}
+            className={cn(
+              'flex items-center gap-1 px-3 py-1.5 rounded-md text-sm font-medium transition-colors',
+              viewMode === 'list'
+                ? 'bg-white text-blue-600 shadow-sm'
+                : 'text-gray-600 hover:text-gray-900'
+            )}
+          >
+            <List className="w-4 h-4" />
+            Всички
+          </button>
+        </div>
       </div>
 
-      {/* Week Navigation */}
+      {/* Week Navigation - only show in week view */}
+      {viewMode === 'week' && (
       <div className="flex items-center justify-between bg-white rounded-xl p-4 shadow-sm border border-gray-100">
         <div className="flex items-center gap-2">
           <button
@@ -563,8 +652,88 @@ export default function CalendarPage() {
           <span>Днес: <strong className="text-gray-900">{todayAppointments}</strong> часа</span>
         </div>
       </div>
+      )}
 
-      {/* Calendar Grid */}
+      {/* List View - All Appointments */}
+      {viewMode === 'list' && (
+        <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+          <div className="p-4 border-b border-gray-100">
+            <h2 className="text-lg font-semibold text-gray-900">Всички предстоящи часове</h2>
+            <p className="text-sm text-gray-500">Следващите 60 дни</p>
+          </div>
+          {loadingAll ? (
+            <div className="flex items-center justify-center h-[400px]">
+              <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
+            </div>
+          ) : allAppointments.length === 0 ? (
+            <div className="flex items-center justify-center h-[200px] text-gray-500">
+              Няма предстоящи часове
+            </div>
+          ) : (
+            <div className="divide-y divide-gray-100 max-h-[600px] overflow-y-auto">
+              {allAppointments.map((apt) => (
+                <div
+                  key={apt.id}
+                  onClick={() => openAppointmentModal(apt)}
+                  className="p-4 hover:bg-gray-50 cursor-pointer transition-colors"
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-4">
+                      <div className="text-center min-w-[60px]">
+                        <div className="text-lg font-bold text-gray-900">
+                          {new Date(apt.appointment_date).getDate()}
+                        </div>
+                        <div className="text-xs text-gray-500">
+                          {new Date(apt.appointment_date).toLocaleDateString('bg-BG', { month: 'short' })}
+                        </div>
+                      </div>
+                      <div className="h-12 w-px bg-gray-200" />
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <Clock className="w-4 h-4 text-gray-400" />
+                          <span className="font-medium text-gray-900">
+                            {apt.start_time.slice(0, 5)} - {apt.end_time.slice(0, 5)}
+                          </span>
+                          <span className={cn(
+                            'px-2 py-0.5 text-xs font-medium rounded-full text-white',
+                            statusColors[apt.status] || 'bg-blue-500'
+                          )}>
+                            {statusLabels[apt.status] || apt.status}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-2 mt-1">
+                          <User className="w-4 h-4 text-gray-400" />
+                          <span className="text-gray-700">{apt.patient?.name || 'Неизвестен пациент'}</span>
+                          {apt.type && (
+                            <>
+                              <span className="text-gray-300">|</span>
+                              <span className="text-gray-500">{apt.type}</span>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      {apt.doctor && (
+                        <div className="flex items-center gap-2">
+                          <div className={cn('w-3 h-3 rounded-full', apt.doctor.color || 'bg-blue-500')} />
+                          <span className="text-sm text-gray-600">{apt.doctor.name}</span>
+                        </div>
+                      )}
+                      <div className="text-xs text-gray-400 mt-1">
+                        {new Date(apt.appointment_date).toLocaleDateString('bg-BG', { weekday: 'long' })}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Calendar Grid - Week View */}
+      {viewMode === 'week' && (
       <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
         {loading ? (
           <div className="flex items-center justify-center h-[600px]">
@@ -666,6 +835,7 @@ export default function CalendarPage() {
           </div>
         )}
       </div>
+      )}
 
       {/* Quick Stats per Doctor */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
