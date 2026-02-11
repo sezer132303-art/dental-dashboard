@@ -87,7 +87,7 @@ export async function PATCH(
     }
 
     // Handle admin user updates
-    if (body.admin_name || body.admin_password) {
+    if (body.admin_name || body.admin_password || body.admin_phone) {
       // Find existing admin user
       const { data: adminUser } = await supabase
         .from('users')
@@ -97,6 +97,7 @@ export async function PATCH(
         .maybeSingle()
 
       if (adminUser) {
+        // Update existing admin
         const adminUpdate: Record<string, any> = {}
 
         if (body.admin_name?.trim()) {
@@ -115,6 +116,39 @@ export async function PATCH(
 
           if (adminError) {
             console.error('Update admin error:', adminError)
+          }
+        }
+      } else if (body.admin_phone && body.admin_password && body.admin_name) {
+        // Create new admin user if all required fields are provided
+        let normalizedPhone = body.admin_phone.replace(/[\s\-\+]/g, '')
+        if (normalizedPhone.startsWith('0')) {
+          normalizedPhone = '359' + normalizedPhone.slice(1)
+        } else if (!normalizedPhone.startsWith('359')) {
+          normalizedPhone = '359' + normalizedPhone
+        }
+
+        // Check if phone already exists
+        const { data: existingUser } = await supabase
+          .from('users')
+          .select('id')
+          .eq('phone', normalizedPhone)
+          .single()
+
+        if (!existingUser && body.admin_password.length >= 6) {
+          const passwordHash = await bcrypt.hash(body.admin_password, 10)
+          const { error: createError } = await supabase
+            .from('users')
+            .insert({
+              phone: normalizedPhone,
+              name: body.admin_name.trim(),
+              role: 'clinic',
+              clinic_id: id,
+              is_active: true,
+              password_hash: passwordHash
+            })
+
+          if (createError) {
+            console.error('Create admin error:', createError)
           }
         }
       }
