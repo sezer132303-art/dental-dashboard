@@ -64,7 +64,7 @@ export async function PATCH(
 
     if (error) {
       console.error('Update clinic error:', error)
-      return NextResponse.json({ error: 'Грешка при обновяване' }, { status: 500 })
+      return NextResponse.json({ error: `Грешка при обновяване: ${error.message}` }, { status: 500 })
     }
 
     return NextResponse.json(clinic)
