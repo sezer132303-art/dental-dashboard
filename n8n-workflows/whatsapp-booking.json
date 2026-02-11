@@ -64,13 +64,13 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "http://localhost:3000/api/n8n/log-conversation",
+        "url": "https://dental-dashboard-nu.vercel.app/api/n8n/log-conversation",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
             {
               "name": "X-API-Key",
-              "value": "dental-n8n-whatsapp-booking-2026"
+              "value": "79d22dce33bd515d33124461ecb3202c27e660944ef29b2cb3cdf3396d37c6e4"
             },
             {
               "name": "Content-Type",
@@ -206,13 +206,13 @@
     {
       "parameters": {
         "method": "GET",
-        "url": "http://localhost:3000/api/n8n/availability",
+        "url": "https://dental-dashboard-nu.vercel.app/api/n8n/availability",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
             {
               "name": "X-API-Key",
-              "value": "dental-n8n-whatsapp-booking-2026"
+              "value": "79d22dce33bd515d33124461ecb3202c27e660944ef29b2cb3cdf3396d37c6e4"
             }
           ]
         },
@@ -269,13 +269,13 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "http://localhost:3000/api/n8n/book-appointment",
+        "url": "https://dental-dashboard-nu.vercel.app/api/n8n/book-appointment",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
             {
               "name": "X-API-Key",
-              "value": "dental-n8n-whatsapp-booking-2026"
+              "value": "79d22dce33bd515d33124461ecb3202c27e660944ef29b2cb3cdf3396d37c6e4"
             },
             {
               "name": "Content-Type",
