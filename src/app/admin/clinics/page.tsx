@@ -232,8 +232,13 @@ export default function AdminClinicsPage() {
       const data = await response.json()
 
       if (response.ok) {
-        setShowModal(false)
-        fetchClinics()
+        // Check if admin operation had issues
+        if (data.adminResult && !data.adminResult.success) {
+          setError(`Клиниката е запазена, но: ${data.adminResult.error || 'Грешка с админ акаунта'}`)
+        } else {
+          setShowModal(false)
+          fetchClinics()
+        }
       } else {
         setError(data.error || 'Грешка при запазване')
       }
@@ -463,31 +468,30 @@ export default function AdminClinicsPage() {
                       onChange={(e) => setFormData({ ...formData, admin_phone: e.target.value })}
                       placeholder="0888 123 456"
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-900"
-                      required={!editingClinic}
-                      disabled={!!editingClinic}
+                      required
                     />
-                    {editingClinic && (
-                      <p className="text-xs text-gray-400 mt-1">Телефонът не може да се променя</p>
+                    {editingClinic && !formData.admin_phone && (
+                      <p className="text-xs text-orange-500 mt-1">Въведете телефон за създаване на админ</p>
                     )}
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
                       <span className="flex items-center gap-1">
                         <Key className="w-3 h-3" />
-                        {editingClinic ? 'Нова парола' : 'Парола *'}
+                        {editingClinic ? 'Парола' : 'Парола *'}
                       </span>
                     </label>
                     <input
                       type="password"
                       value={formData.admin_password}
                       onChange={(e) => setFormData({ ...formData, admin_password: e.target.value })}
-                      placeholder={editingClinic ? 'Оставете празно за без промяна' : 'Минимум 6 символа'}
+                      placeholder={editingClinic ? 'Въведете нова парола' : 'Минимум 6 символа'}
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-900"
                       required={!editingClinic}
                       minLength={6}
                     />
                     {editingClinic && (
-                      <p className="text-xs text-gray-400 mt-1">Оставете празно, ако не искате да сменяте паролата</p>
+                      <p className="text-xs text-gray-400 mt-1">Въведете нова парола за да я промените</p>
                     )}
                   </div>
                 </div>

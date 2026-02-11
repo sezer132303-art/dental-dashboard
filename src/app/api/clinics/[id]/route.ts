@@ -87,14 +87,26 @@ export async function PATCH(
     }
 
     // Handle admin user updates
+    let adminResult: { action: string; success: boolean; error?: string } | null = null
+
     if (body.admin_name || body.admin_password || body.admin_phone) {
-      // Find existing admin user
+      // Normalize phone for lookup
+      let lookupPhone = body.admin_phone?.replace(/[\s\-\+]/g, '') || ''
+      if (lookupPhone.startsWith('0')) {
+        lookupPhone = '359' + lookupPhone.slice(1)
+      } else if (lookupPhone && !lookupPhone.startsWith('359')) {
+        lookupPhone = '359' + lookupPhone
+      }
+
+      // Find existing admin user by clinic_id
       const { data: adminUser } = await supabase
         .from('users')
-        .select('id')
+        .select('id, phone')
         .eq('clinic_id', id)
         .eq('role', 'clinic')
         .maybeSingle()
+
+      console.log('Admin lookup for clinic', id, '- Found:', adminUser ? 'Yes' : 'No')
 
       if (adminUser) {
         // Update existing admin
@@ -106,6 +118,7 @@ export async function PATCH(
 
         if (body.admin_password && body.admin_password.length >= 6) {
           adminUpdate.password_hash = await bcrypt.hash(body.admin_password, 10)
+          console.log('Password will be updated for admin', adminUser.id)
         }
 
         if (Object.keys(adminUpdate).length > 0) {
@@ -116,40 +129,52 @@ export async function PATCH(
 
           if (adminError) {
             console.error('Update admin error:', adminError)
+            adminResult = { action: 'update', success: false, error: adminError.message }
+          } else {
+            console.log('Admin updated successfully:', Object.keys(adminUpdate))
+            adminResult = { action: 'update', success: true }
           }
+        } else {
+          adminResult = { action: 'update', success: true }
         }
-      } else if (body.admin_phone && body.admin_password && body.admin_name) {
+      } else if (lookupPhone && body.admin_password && body.admin_name) {
         // Create new admin user if all required fields are provided
-        let normalizedPhone = body.admin_phone.replace(/[\s\-\+]/g, '')
-        if (normalizedPhone.startsWith('0')) {
-          normalizedPhone = '359' + normalizedPhone.slice(1)
-        } else if (!normalizedPhone.startsWith('359')) {
-          normalizedPhone = '359' + normalizedPhone
-        }
+        console.log('Creating new admin with phone:', lookupPhone)
 
         // Check if phone already exists
         const { data: existingUser } = await supabase
           .from('users')
           .select('id')
-          .eq('phone', normalizedPhone)
-          .single()
+          .eq('phone', lookupPhone)
+          .maybeSingle()
 
-        if (!existingUser && body.admin_password.length >= 6) {
+        if (existingUser) {
+          console.log('Phone already registered:', lookupPhone)
+          adminResult = { action: 'create', success: false, error: 'Този телефон вече е регистриран' }
+        } else if (body.admin_password.length >= 6) {
           const passwordHash = await bcrypt.hash(body.admin_password, 10)
-          const { error: createError } = await supabase
+          const { data: newAdmin, error: createError } = await supabase
             .from('users')
             .insert({
-              phone: normalizedPhone,
+              phone: lookupPhone,
               name: body.admin_name.trim(),
               role: 'clinic',
               clinic_id: id,
               is_active: true,
               password_hash: passwordHash
             })
+            .select()
+            .single()
 
           if (createError) {
             console.error('Create admin error:', createError)
+            adminResult = { action: 'create', success: false, error: createError.message }
+          } else {
+            console.log('New admin created:', newAdmin?.id)
+            adminResult = { action: 'create', success: true }
           }
+        } else {
+          adminResult = { action: 'create', success: false, error: 'Паролата трябва да е поне 6 символа' }
         }
       }
     }
@@ -240,7 +265,19 @@ export async function PATCH(
       }
     }
 
-    return NextResponse.json(clinic)
+    // Fetch updated admin info
+    const { data: updatedAdmin } = await supabase
+      .from('users')
+      .select('id, phone, name')
+      .eq('clinic_id', id)
+      .eq('role', 'clinic')
+      .maybeSingle()
+
+    return NextResponse.json({
+      ...clinic,
+      admin: updatedAdmin || null,
+      adminResult
+    })
   } catch (error) {
     console.error('Update clinic API error:', error)
     return NextResponse.json({ error: 'Неочаквана грешка' }, { status: 500 })
