@@ -55,9 +55,10 @@ export default function CalendarPage() {
   const datePickerRef = useRef<HTMLDivElement>(null)
   const [currentWeekStart, setCurrentWeekStart] = useState<Date>(() => {
     const now = new Date()
-    const day = now.getDay()
-    const diff = now.getDate() - day + (day === 0 ? -6 : 1) // Monday
-    return new Date(now.setDate(diff))
+    const dayOfWeek = now.getDay()
+    const daysFromMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1
+    const monday = new Date(now.getFullYear(), now.getMonth(), now.getDate() - daysFromMonday)
+    return monday
   })
 
   // Close date picker when clicking outside
@@ -167,19 +168,21 @@ export default function CalendarPage() {
     setCurrentWeekStart(addDays(currentWeekStart, 7))
   }
 
+  const getMonday = (date: Date): Date => {
+    const d = new Date(date.getFullYear(), date.getMonth(), date.getDate())
+    const dayOfWeek = d.getDay()
+    // Convert Sunday (0) to 7 for easier calculation
+    const daysFromMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1
+    d.setDate(d.getDate() - daysFromMonday)
+    return d
+  }
+
   const goToToday = () => {
-    const now = new Date()
-    const day = now.getDay()
-    const diff = now.getDate() - day + (day === 0 ? -6 : 1)
-    setCurrentWeekStart(new Date(now.setDate(diff)))
+    setCurrentWeekStart(getMonday(new Date()))
   }
 
   const goToDate = (date: Date) => {
-    const day = date.getDay()
-    const diff = date.getDate() - day + (day === 0 ? -6 : 1)
-    const weekStart = new Date(date)
-    weekStart.setDate(diff)
-    setCurrentWeekStart(weekStart)
+    setCurrentWeekStart(getMonday(date))
     setShowDatePicker(false)
   }
 
