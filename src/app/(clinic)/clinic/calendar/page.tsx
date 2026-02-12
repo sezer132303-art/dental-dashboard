@@ -1,7 +1,7 @@
 'use client'
 
-import { useEffect, useState, useRef } from 'react'
-import { ChevronLeft, ChevronRight, Loader2, CalendarDays } from 'lucide-react'
+import { useEffect, useState, useRef, useCallback } from 'react'
+import { ChevronLeft, ChevronRight, Loader2, CalendarDays, RefreshCw } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 interface Doctor {
@@ -44,6 +44,8 @@ export default function ClinicCalendarPage() {
   const [doctors, setDoctors] = useState<Doctor[]>([])
   const [appointments, setAppointments] = useState<Appointment[]>([])
   const [loading, setLoading] = useState(true)
+  const [syncing, setSyncing] = useState(false)
+  const [syncMessage, setSyncMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null)
   const [selectedDoctor, setSelectedDoctor] = useState<Doctor | null>(null)
   const [showDatePicker, setShowDatePicker] = useState(false)
   const [pickerMonth, setPickerMonth] = useState(new Date())
@@ -85,39 +87,6 @@ export default function ClinicCalendarPage() {
     fetchDoctors()
   }, [])
 
-  // Fetch appointments for the week
-  useEffect(() => {
-    const fetchAppointments = async () => {
-      try {
-        setLoading(true)
-        const startDate = formatDate(currentWeekStart)
-        const endDate = formatDate(addDays(currentWeekStart, 6))
-
-        const params = new URLSearchParams({
-          startDate,
-          endDate
-        })
-
-        if (selectedDoctor) {
-          params.append('doctorId', selectedDoctor.id)
-        }
-
-        const response = await fetch(`/api/clinic/appointments?${params.toString()}`)
-        const data = await response.json()
-
-        if (data.appointments) {
-          setAppointments(data.appointments)
-        }
-      } catch (err) {
-        console.error('Error fetching appointments:', err)
-      } finally {
-        setLoading(false)
-      }
-    }
-
-    fetchAppointments()
-  }, [currentWeekStart, selectedDoctor])
-
   const formatDate = (date: Date) => {
     return date.toISOString().split('T')[0]
   }
@@ -126,6 +95,68 @@ export default function ClinicCalendarPage() {
     const result = new Date(date)
     result.setDate(result.getDate() + days)
     return result
+  }
+
+  // Fetch appointments for the week
+  const fetchAppointments = useCallback(async () => {
+    try {
+      setLoading(true)
+      const startDate = formatDate(currentWeekStart)
+      const endDate = formatDate(addDays(currentWeekStart, 6))
+
+      const params = new URLSearchParams({
+        startDate,
+        endDate
+      })
+
+      if (selectedDoctor) {
+        params.append('doctorId', selectedDoctor.id)
+      }
+
+      const response = await fetch(`/api/clinic/appointments?${params.toString()}`)
+      const data = await response.json()
+
+      if (data.appointments) {
+        setAppointments(data.appointments)
+      }
+    } catch (err) {
+      console.error('Error fetching appointments:', err)
+    } finally {
+      setLoading(false)
+    }
+  }, [currentWeekStart, selectedDoctor])
+
+  useEffect(() => {
+    fetchAppointments()
+  }, [fetchAppointments])
+
+  // Sync with Google Calendar
+  const handleSync = async () => {
+    setSyncing(true)
+    setSyncMessage(null)
+    try {
+      const response = await fetch('/api/calendar/sync', { method: 'POST' })
+      if (response.ok) {
+        setSyncMessage({ type: 'success', text: 'Синхронизацията стартира' })
+        // Wait a bit and refresh appointments
+        setTimeout(() => {
+          fetchAppointments()
+          setSyncMessage(null)
+        }, 3000)
+      } else {
+        setSyncMessage({ type: 'error', text: 'Грешка при синхронизация' })
+      }
+    } catch (err) {
+      console.error('Sync error:', err)
+      setSyncMessage({ type: 'error', text: 'Грешка при синхронизация' })
+    } finally {
+      setSyncing(false)
+    }
+  }
+
+  // Manual refresh
+  const handleRefresh = () => {
+    fetchAppointments()
   }
 
   const getWeekDays = () => {
@@ -364,11 +395,43 @@ export default function ClinicCalendarPage() {
           )}
         </div>
 
-        <div className="flex items-center gap-4 text-sm text-gray-600">
-          <span>Тази седмица: <strong className="text-gray-900">{weekAppointments}</strong> часа</span>
-          <span>Днес: <strong className="text-gray-900">{todayAppointments}</strong> часа</span>
+        <div className="flex items-center gap-4">
+          <div className="flex items-center gap-2 text-sm text-gray-600">
+            <span>Тази седмица: <strong className="text-gray-900">{weekAppointments}</strong> часа</span>
+            <span>Днес: <strong className="text-gray-900">{todayAppointments}</strong> часа</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handleRefresh}
+              disabled={loading}
+              className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 transition disabled:opacity-50"
+              title="Обнови данните"
+            >
+              <RefreshCw className={cn('w-4 h-4', loading && 'animate-spin')} />
+              Обнови
+            </button>
+            <button
+              onClick={handleSync}
+              disabled={syncing}
+              className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition disabled:opacity-50"
+              title="Синхронизирай с Google Calendar"
+            >
+              <CalendarDays className={cn('w-4 h-4', syncing && 'animate-pulse')} />
+              {syncing ? 'Синхронизиране...' : 'Синхронизирай'}
+            </button>
+          </div>
         </div>
       </div>
+
+      {/* Sync Message */}
+      {syncMessage && (
+        <div className={cn(
+          'p-3 rounded-lg text-sm font-medium',
+          syncMessage.type === 'success' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
+        )}>
+          {syncMessage.text}
+        </div>
+      )}
 
       {/* Calendar Grid */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
