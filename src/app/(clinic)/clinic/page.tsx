@@ -37,6 +37,15 @@ interface DoctorStats {
   attendanceRate: number
 }
 
+interface MetricsDoctorStats {
+  id: string
+  name: string
+  patientsThisWeek: number
+  completed: number
+  noShow: number
+  attendanceRate: number
+}
+
 interface Metrics {
   attendanceRate: number
   attendanceChange: number
@@ -108,8 +117,8 @@ export default function ClinicDashboardPage() {
         const doctorsData = await doctorsRes.json()
 
         // Merge doctor stats from metrics with doctor info
-        const doctorStatsMap = new Map(
-          (metricsData.doctors || []).map((d: any) => [d.id, d])
+        const doctorStatsMap = new Map<string, MetricsDoctorStats>(
+          (metricsData.doctors || []).map((d: MetricsDoctorStats) => [d.id, d])
         )
 
         // Build metrics object
@@ -121,16 +130,16 @@ export default function ClinicDashboardPage() {
           appointmentsToday: metricsData.pendingAppointments || 0,
           noShows: metricsData.noShows || 0,
           doctors: (doctorsData.doctors || []).map((d: any) => {
-            const stats = doctorStatsMap.get(d.id) || {}
+            const stats = doctorStatsMap.get(d.id)
             return {
               id: d.id,
               name: d.name,
               specialty: d.specialty,
               color: d.color || 'bg-blue-500',
-              patientsThisWeek: stats.patientsThisWeek || 0,
-              completed: stats.completed || 0,
-              noShow: stats.noShow || 0,
-              attendanceRate: stats.attendanceRate || 100
+              patientsThisWeek: stats?.patientsThisWeek || 0,
+              completed: stats?.completed || 0,
+              noShow: stats?.noShow || 0,
+              attendanceRate: stats?.attendanceRate || 100
             }
           })
         })
