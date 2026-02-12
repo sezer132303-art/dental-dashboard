@@ -237,14 +237,14 @@
       "main": [
         [
           {
-            "node": "Prepare Calendar Query",
+            "node": "Respond to Webhook",
             "type": "main",
             "index": 0
           }
         ],
         [
           {
-            "node": "Respond to Webhook",
+            "node": "Prepare Calendar Query",
             "type": "main",
             "index": 0
           }
