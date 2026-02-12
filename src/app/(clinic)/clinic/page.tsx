@@ -107,6 +107,11 @@ export default function ClinicDashboardPage() {
         const metricsData = await metricsRes.json()
         const doctorsData = await doctorsRes.json()
 
+        // Merge doctor stats from metrics with doctor info
+        const doctorStatsMap = new Map(
+          (metricsData.doctors || []).map((d: any) => [d.id, d])
+        )
+
         // Build metrics object
         setMetrics({
           attendanceRate: metricsData.attendanceRate || 0,
@@ -114,17 +119,20 @@ export default function ClinicDashboardPage() {
           totalPatients: metricsData.totalPatients || 0,
           appointmentsThisWeek: metricsData.totalAppointments || 0,
           appointmentsToday: metricsData.pendingAppointments || 0,
-          noShows: 0,
-          doctors: (doctorsData.doctors || []).map((d: any) => ({
-            id: d.id,
-            name: d.name,
-            specialty: d.specialty,
-            color: d.color || 'bg-blue-500',
-            patientsThisWeek: 0,
-            completed: 0,
-            noShow: 0,
-            attendanceRate: 100
-          }))
+          noShows: metricsData.noShows || 0,
+          doctors: (doctorsData.doctors || []).map((d: any) => {
+            const stats = doctorStatsMap.get(d.id) || {}
+            return {
+              id: d.id,
+              name: d.name,
+              specialty: d.specialty,
+              color: d.color || 'bg-blue-500',
+              patientsThisWeek: stats.patientsThisWeek || 0,
+              completed: stats.completed || 0,
+              noShow: stats.noShow || 0,
+              attendanceRate: stats.attendanceRate || 100
+            }
+          })
         })
       } catch (err) {
         console.error('Error fetching metrics:', err)

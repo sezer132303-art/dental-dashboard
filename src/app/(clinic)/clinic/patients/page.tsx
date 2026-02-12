@@ -4,8 +4,10 @@ import { useEffect, useState } from 'react'
 import { Users, Search, Phone, Calendar, CheckCircle, XCircle } from 'lucide-react'
 
 interface Patient {
+  id: string
   phone: string
-  name: string | null
+  name: string
+  email?: string
   first_contact_at: string
   last_contact_at: string
   total_appointments: number
@@ -78,7 +80,7 @@ export default function ClinicPatients() {
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
           {filteredPatients.map((patient) => (
             <div
-              key={patient.phone}
+              key={patient.id}
               className="bg-white rounded-xl shadow-sm p-5 hover:shadow-md transition-shadow"
             >
               <div className="flex items-start gap-4">
