@@ -11,28 +11,53 @@ export async function GET(request: NextRequest) {
     }
 
     const clinicId = user.clinic_id
+    if (!clinicId) {
+      return NextResponse.json({ error: 'No clinic assigned' }, { status: 403 })
+    }
+
     const supabase = createServerSupabaseClient()
     const { searchParams } = new URL(request.url)
 
     const page = parseInt(searchParams.get('page') || '1')
-    const limit = parseInt(searchParams.get('limit') || '20')
+    const limit = parseInt(searchParams.get('limit') || '100')
     const status = searchParams.get('status')
+    const startDate = searchParams.get('startDate')
+    const endDate = searchParams.get('endDate')
+    const doctorId = searchParams.get('doctorId')
     const offset = (page - 1) * limit
 
-    // Build query
+    // Build query with relations
     let query = supabase
       .from('appointments')
-      .select('*', { count: 'exact' })
-      .order('appointment_datetime', { ascending: false })
-      .range(offset, offset + limit - 1)
+      .select(`
+        *,
+        doctor:doctors(id, name, color, specialty),
+        patient:patients(id, name, phone)
+      `, { count: 'exact' })
+      .eq('clinic_id', clinicId)
+      .order('appointment_date', { ascending: true })
+      .order('start_time', { ascending: true })
 
-    if (clinicId) {
-      query = query.eq('clinic_id', clinicId)
+    // Date range filter
+    if (startDate) {
+      query = query.gte('appointment_date', startDate)
+    }
+    if (endDate) {
+      query = query.lte('appointment_date', endDate)
     }
 
+    // Doctor filter
+    if (doctorId) {
+      query = query.eq('doctor_id', doctorId)
+    }
+
+    // Status filter
     if (status && status !== 'all') {
       query = query.eq('status', status)
     }
+
+    // Pagination
+    query = query.range(offset, offset + limit - 1)
 
     const { data: appointments, count, error } = await query
 
