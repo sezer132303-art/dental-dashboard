@@ -98,17 +98,43 @@ export async function PATCH(
         lookupPhone = '359' + lookupPhone
       }
 
-      // Find existing admin user by clinic_id
-      const { data: adminUser } = await supabase
+      // Find existing admin user by clinic_id OR by phone
+      let adminUser = null
+
+      // First try by clinic_id
+      const { data: adminByClinic } = await supabase
         .from('users')
-        .select('id, phone')
+        .select('id, phone, clinic_id')
         .eq('clinic_id', id)
         .eq('role', 'clinic')
         .maybeSingle()
 
+      if (adminByClinic) {
+        adminUser = adminByClinic
+        console.log('Admin found by clinic_id:', adminUser.id)
+      } else if (lookupPhone) {
+        // Try by phone number
+        const { data: adminByPhone } = await supabase
+          .from('users')
+          .select('id, phone, clinic_id')
+          .eq('phone', lookupPhone)
+          .maybeSingle()
+
+        if (adminByPhone) {
+          // Check if this user belongs to THIS clinic or has no clinic
+          if (adminByPhone.clinic_id === id || !adminByPhone.clinic_id) {
+            adminUser = adminByPhone
+            console.log('Admin found by phone:', adminUser.id)
+          } else {
+            console.log('Phone belongs to different clinic:', adminByPhone.clinic_id)
+            adminResult = { action: 'create', success: false, error: 'Този телефон е регистриран за друга клиника' }
+          }
+        }
+      }
+
       console.log('Admin lookup for clinic', id, '- Found:', adminUser ? 'Yes' : 'No')
 
-      if (adminUser) {
+      if (adminUser && !adminResult) {
         // Update existing admin
         const adminUpdate: Record<string, any> = {}
 
@@ -119,6 +145,11 @@ export async function PATCH(
         if (body.admin_password && body.admin_password.length >= 6) {
           adminUpdate.password_hash = await bcrypt.hash(body.admin_password, 10)
           console.log('Password will be updated for admin', adminUser.id)
+        }
+
+        // Ensure clinic_id and role are set
+        if (!adminUser.clinic_id || adminUser.clinic_id !== id) {
+          adminUpdate.clinic_id = id
         }
 
         if (Object.keys(adminUpdate).length > 0) {
@@ -137,21 +168,11 @@ export async function PATCH(
         } else {
           adminResult = { action: 'update', success: true }
         }
-      } else if (lookupPhone && body.admin_password && body.admin_name) {
-        // Create new admin user if all required fields are provided
+      } else if (!adminResult && lookupPhone && body.admin_password && body.admin_name) {
+        // Create new admin user if all required fields are provided and no existing user found
         console.log('Creating new admin with phone:', lookupPhone)
 
-        // Check if phone already exists
-        const { data: existingUser } = await supabase
-          .from('users')
-          .select('id')
-          .eq('phone', lookupPhone)
-          .maybeSingle()
-
-        if (existingUser) {
-          console.log('Phone already registered:', lookupPhone)
-          adminResult = { action: 'create', success: false, error: 'Този телефон вече е регистриран' }
-        } else if (body.admin_password.length >= 6) {
+        if (body.admin_password.length >= 6) {
           const passwordHash = await bcrypt.hash(body.admin_password, 10)
           const { data: newAdmin, error: createError } = await supabase
             .from('users')
