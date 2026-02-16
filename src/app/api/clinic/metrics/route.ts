@@ -183,10 +183,17 @@ export async function GET() {
       serverTime: new Date().toISOString(),
       // Extra debug: sample of appointment dates for troubleshooting
       _debug: {
-        sampleDates: appointments.slice(0, 5).map(a => a.appointment_date),
+        rawDates: rawAppointments?.slice(0, 5).map(a => a.appointment_date),
+        normalizedDates: appointments.slice(0, 5).map(a => a.appointment_date),
+        allDates: appointments.map(a => a.appointment_date),
         thisWeekSample: thisWeekAppointments.slice(0, 5).map(a => ({
           date: a.appointment_date,
           status: a.status
+        })),
+        dateComparison: appointments.slice(0, 5).map(a => ({
+          date: a.appointment_date,
+          inRange: a.appointment_date >= startDateStr && a.appointment_date <= endDateStr,
+          comparison: `${a.appointment_date} >= ${startDateStr} && ${a.appointment_date} <= ${endDateStr}`
         }))
       }
     })

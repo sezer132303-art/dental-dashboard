@@ -47,8 +47,11 @@ interface MetricsDoctorStats {
 }
 
 interface DebugInfo {
-  sampleDates?: string[]
+  rawDates?: string[]
+  normalizedDates?: string[]
+  allDates?: string[]
   thisWeekSample?: { date: string; status: string }[]
+  dateComparison?: { date: string; inRange: boolean; comparison: string }[]
 }
 
 interface Metrics {
@@ -288,15 +291,22 @@ export default function ClinicDashboardPage() {
               </BarChart>
             </ResponsiveContainer>
           ) : (
-            <div className="h-[300px] flex flex-col items-center justify-center text-gray-400">
-              <p>Няма данни за тази седмица</p>
-              <p className="text-xs mt-2">
-                {metrics.appointmentsThisWeek} часове тази седмица | {metrics.doctors.length} лекари
+            <div className="h-[300px] flex flex-col items-center justify-center text-gray-400 text-xs">
+              <p className="text-base mb-2">Няма данни за тази седмица</p>
+              <p>
+                {metrics.appointmentsThisWeek} часове тази седмица | {metrics.doctors.length} лекари | {metrics.totalAppointments} общо часове
               </p>
-              {metrics._debug?.sampleDates && metrics._debug.sampleDates.length > 0 && (
-                <p className="text-xs mt-1">
-                  Примерни дати: {metrics._debug.sampleDates.join(', ')}
-                </p>
+              {metrics._debug?.allDates && metrics._debug.allDates.length > 0 && (
+                <div className="mt-2 text-left max-w-md">
+                  <p>Всички дати в системата: {metrics._debug.allDates.join(', ')}</p>
+                  {metrics._debug.dateComparison && (
+                    <p className="mt-1">
+                      Проверка: {metrics._debug.dateComparison.map(d =>
+                        `${d.date}=${d.inRange ? 'ДА' : 'НЕ'}`
+                      ).join(', ')}
+                    </p>
+                  )}
+                </div>
               )}
             </div>
           )}
