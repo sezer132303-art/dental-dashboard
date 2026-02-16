@@ -65,14 +65,27 @@ export default function ClinicCalendarPage() {
   const [syncMessage, setSyncMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null)
   const [selectedDoctor, setSelectedDoctor] = useState<Doctor | null>(null)
   const [showDatePicker, setShowDatePicker] = useState(false)
-  const [pickerMonth, setPickerMonth] = useState(new Date())
+  const [pickerMonth, setPickerMonth] = useState<Date | null>(null)
   const datePickerRef = useRef<HTMLDivElement>(null)
-  const [currentWeekStart, setCurrentWeekStart] = useState<Date>(() => {
+  const [currentWeekStart, setCurrentWeekStart] = useState<Date | null>(null)
+  const [isClient, setIsClient] = useState(false)
+
+  // Calculate Monday of the current week - only on client side
+  const getMonday = (date: Date): Date => {
+    const d = new Date(date.getFullYear(), date.getMonth(), date.getDate())
+    const dayOfWeek = d.getDay()
+    const daysFromMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1
+    d.setDate(d.getDate() - daysFromMonday)
+    return d
+  }
+
+  // Initialize on client side only to avoid SSR timezone issues
+  useEffect(() => {
     const now = new Date()
-    const day = now.getDay()
-    const diff = now.getDate() - day + (day === 0 ? -6 : 1) // Monday
-    return new Date(now.setDate(diff))
-  })
+    setIsClient(true)
+    setCurrentWeekStart(getMonday(now))
+    setPickerMonth(new Date(now.getFullYear(), now.getMonth(), 1))
+  }, [])
 
   // Appointment detail modal
   const [selectedAppointment, setSelectedAppointment] = useState<Appointment | null>(null)
@@ -110,7 +123,10 @@ export default function ClinicCalendarPage() {
   }, [])
 
   const formatDate = (date: Date) => {
-    return date.toISOString().split('T')[0]
+    const year = date.getFullYear()
+    const month = String(date.getMonth() + 1).padStart(2, '0')
+    const day = String(date.getDate()).padStart(2, '0')
+    return `${year}-${month}-${day}`
   }
 
   const formatDisplayDate = (dateStr: string) => {
@@ -130,6 +146,8 @@ export default function ClinicCalendarPage() {
 
   // Fetch appointments for the week
   const fetchAppointments = useCallback(async () => {
+    if (!currentWeekStart) return
+
     try {
       setLoading(true)
       const startDate = formatDate(currentWeekStart)
@@ -229,6 +247,7 @@ export default function ClinicCalendarPage() {
   }
 
   const getWeekDays = () => {
+    if (!currentWeekStart) return []
     return Array.from({ length: 7 }, (_, i) => addDays(currentWeekStart, i))
   }
 
@@ -255,26 +274,21 @@ export default function ClinicCalendarPage() {
   }
 
   const prevWeek = () => {
+    if (!currentWeekStart) return
     setCurrentWeekStart(addDays(currentWeekStart, -7))
   }
 
   const nextWeek = () => {
+    if (!currentWeekStart) return
     setCurrentWeekStart(addDays(currentWeekStart, 7))
   }
 
   const goToToday = () => {
-    const now = new Date()
-    const day = now.getDay()
-    const diff = now.getDate() - day + (day === 0 ? -6 : 1)
-    setCurrentWeekStart(new Date(now.setDate(diff)))
+    setCurrentWeekStart(getMonday(new Date()))
   }
 
   const goToDate = (date: Date) => {
-    const day = date.getDay()
-    const diff = date.getDate() - day + (day === 0 ? -6 : 1)
-    const weekStart = new Date(date)
-    weekStart.setDate(diff)
-    setCurrentWeekStart(weekStart)
+    setCurrentWeekStart(getMonday(date))
     setShowDatePicker(false)
   }
 
@@ -300,16 +314,30 @@ export default function ClinicCalendarPage() {
   }
 
   const prevPickerMonth = () => {
+    if (!pickerMonth) return
     setPickerMonth(new Date(pickerMonth.getFullYear(), pickerMonth.getMonth() - 1, 1))
   }
 
   const nextPickerMonth = () => {
+    if (!pickerMonth) return
     setPickerMonth(new Date(pickerMonth.getFullYear(), pickerMonth.getMonth() + 1, 1))
   }
 
   const isToday = (date: Date) => {
     const today = new Date()
     return formatDate(date) === formatDate(today)
+  }
+
+  // Show loading while initializing client-side date
+  if (!currentWeekStart) {
+    return (
+      <div className="flex items-center justify-center h-[600px]">
+        <div className="flex items-center gap-3">
+          <Loader2 className="w-6 h-6 animate-spin text-blue-600" />
+          <span className="text-gray-500">Зареждане...</span>
+        </div>
+      </div>
+    )
   }
 
   const weekDays = getWeekDays()
@@ -390,7 +418,7 @@ export default function ClinicCalendarPage() {
           </button>
 
           {/* Date Picker Dropdown */}
-          {showDatePicker && (
+          {showDatePicker && pickerMonth && (
             <div className="absolute top-full left-1/2 -translate-x-1/2 mt-2 bg-white rounded-xl shadow-lg border border-gray-200 p-4 z-50 w-72">
               {/* Month Navigation */}
               <div className="flex items-center justify-between mb-4">
