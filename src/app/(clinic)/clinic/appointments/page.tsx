@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { Calendar, Search, Filter, ChevronLeft, ChevronRight } from 'lucide-react'
+import { Calendar, Search, Filter, ChevronLeft, ChevronRight, Loader2 } from 'lucide-react'
 
 interface Appointment {
   id: string
@@ -31,6 +31,7 @@ export default function ClinicAppointments() {
   const [statusFilter, setStatusFilter] = useState<string>('all')
   const [page, setPage] = useState(1)
   const [totalPages, setTotalPages] = useState(1)
+  const [updatingId, setUpdatingId] = useState<string | null>(null)
 
   useEffect(() => {
     fetchAppointments()
@@ -57,6 +58,31 @@ export default function ClinicAppointments() {
       console.error('Error fetching appointments:', error)
     } finally {
       setLoading(false)
+    }
+  }
+
+  async function updateStatus(appointmentId: string, newStatus: string) {
+    setUpdatingId(appointmentId)
+    try {
+      const response = await fetch(`/api/clinic/appointments/${appointmentId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: newStatus })
+      })
+
+      if (response.ok) {
+        setAppointments(appointments.map(apt =>
+          apt.id === appointmentId ? { ...apt, status: newStatus } : apt
+        ))
+      } else {
+        const data = await response.json()
+        alert(data.error || 'Грешка при промяна на статуса')
+      }
+    } catch (error) {
+      console.error('Status update error:', error)
+      alert('Грешка при промяна на статуса')
+    } finally {
+      setUpdatingId(null)
     }
   }
 
@@ -165,6 +191,9 @@ export default function ClinicAppointments() {
                     <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase">
                       Източник
                     </th>
+                    <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase">
+                      Действия
+                    </th>
                   </tr>
                 </thead>
                 <tbody className="divide-y">
@@ -209,6 +238,47 @@ export default function ClinicAppointments() {
                         ) : (
                           <span className="text-xs text-gray-500">Ръчно</span>
                         )}
+                      </td>
+                      <td className="px-6 py-4">
+                        <div className="flex gap-1" onClick={(e) => e.stopPropagation()}>
+                          {updatingId === apt.id ? (
+                            <Loader2 className="w-4 h-4 animate-spin text-gray-400" />
+                          ) : (
+                            <>
+                              {(apt.status === 'scheduled' || apt.status === 'confirmed') && (
+                                <>
+                                  <button
+                                    onClick={() => updateStatus(apt.id, 'completed')}
+                                    className="px-2 py-1 text-xs text-green-600 hover:bg-green-50 rounded font-medium"
+                                  >
+                                    Завърши
+                                  </button>
+                                  <button
+                                    onClick={() => updateStatus(apt.id, 'no_show')}
+                                    className="px-2 py-1 text-xs text-red-600 hover:bg-red-50 rounded font-medium"
+                                  >
+                                    Неявил се
+                                  </button>
+                                  <button
+                                    onClick={() => updateStatus(apt.id, 'cancelled')}
+                                    className="px-2 py-1 text-xs text-gray-600 hover:bg-gray-50 rounded font-medium"
+                                  >
+                                    Отмени
+                                  </button>
+                                </>
+                              )}
+                              {apt.status === 'completed' && (
+                                <span className="text-xs text-gray-400">Завършен</span>
+                              )}
+                              {apt.status === 'cancelled' && (
+                                <span className="text-xs text-gray-400">Отменен</span>
+                              )}
+                              {apt.status === 'no_show' && (
+                                <span className="text-xs text-gray-400">Неявил се</span>
+                              )}
+                            </>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   ))}

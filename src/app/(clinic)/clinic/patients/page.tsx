@@ -318,6 +318,60 @@ export default function ClinicPatients() {
               </div>
             </div>
 
+            {/* Quick Status Actions - показва се само ако има насрочен/потвърден час */}
+            {appointments.some(apt => apt.status === 'scheduled' || apt.status === 'confirmed') && (
+              <div className="px-6 py-3 bg-gray-50 border-b flex items-center gap-3">
+                <span className="text-sm text-gray-600">Бързи действия:</span>
+                {(() => {
+                  const activeApt = appointments.find(apt => apt.status === 'scheduled' || apt.status === 'confirmed')
+                  if (!activeApt) return null
+                  return (
+                    <>
+                      <button
+                        onClick={() => handleAppointmentStatusChange(activeApt.id, 'completed')}
+                        disabled={updatingAppointmentId === activeApt.id}
+                        className="px-3 py-1.5 bg-green-100 text-green-700 hover:bg-green-200 rounded-lg text-sm font-medium flex items-center gap-1 disabled:opacity-50"
+                      >
+                        {updatingAppointmentId === activeApt.id ? (
+                          <Loader2 className="w-3 h-3 animate-spin" />
+                        ) : (
+                          <CheckCircle className="w-4 h-4" />
+                        )}
+                        Завършен
+                      </button>
+                      <button
+                        onClick={() => handleAppointmentStatusChange(activeApt.id, 'no_show')}
+                        disabled={updatingAppointmentId === activeApt.id}
+                        className="px-3 py-1.5 bg-red-100 text-red-700 hover:bg-red-200 rounded-lg text-sm font-medium flex items-center gap-1 disabled:opacity-50"
+                      >
+                        {updatingAppointmentId === activeApt.id ? (
+                          <Loader2 className="w-3 h-3 animate-spin" />
+                        ) : (
+                          <XCircle className="w-4 h-4" />
+                        )}
+                        Неявяване
+                      </button>
+                      <button
+                        onClick={() => handleAppointmentStatusChange(activeApt.id, 'cancelled')}
+                        disabled={updatingAppointmentId === activeApt.id}
+                        className="px-3 py-1.5 bg-gray-100 text-gray-700 hover:bg-gray-200 rounded-lg text-sm font-medium flex items-center gap-1 disabled:opacity-50"
+                      >
+                        {updatingAppointmentId === activeApt.id ? (
+                          <Loader2 className="w-3 h-3 animate-spin" />
+                        ) : (
+                          <X className="w-4 h-4" />
+                        )}
+                        Отменен
+                      </button>
+                      <span className="text-xs text-gray-400 ml-2">
+                        за {formatDate(activeApt.appointment_date)} в {formatTime(activeApt.start_time)}
+                      </span>
+                    </>
+                  )
+                })()}
+              </div>
+            )}
+
             {/* Modal Body */}
             <div className="flex-1 overflow-y-auto p-6 space-y-6">
               {/* Stats */}

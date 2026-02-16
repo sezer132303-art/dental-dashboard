@@ -17,19 +17,29 @@ export async function GET() {
 
     const supabase = createServerSupabaseClient()
 
-    // Get current week boundaries
+    // Get current week boundaries (Monday to Sunday)
     const now = new Date()
-    const dayOfWeek = now.getDay()
+    const dayOfWeek = now.getDay() // 0 = Sunday, 1 = Monday, etc.
+
+    // Calculate days to subtract to get to Monday
+    const daysToMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1
+
     const startOfWeek = new Date(now)
-    startOfWeek.setDate(now.getDate() - (dayOfWeek === 0 ? 6 : dayOfWeek - 1))
-    startOfWeek.setHours(0, 0, 0, 0)
+    startOfWeek.setDate(now.getDate() - daysToMonday)
 
     const endOfWeek = new Date(startOfWeek)
-    endOfWeek.setDate(startOfWeek.getDate() + 6)
-    endOfWeek.setHours(23, 59, 59, 999)
+    endOfWeek.setDate(startOfWeek.getDate() + 6) // Sunday
 
-    const startDateStr = startOfWeek.toISOString().split('T')[0]
-    const endDateStr = endOfWeek.toISOString().split('T')[0]
+    // Format dates as YYYY-MM-DD using local time (not UTC)
+    const formatLocalDate = (date: Date) => {
+      const year = date.getFullYear()
+      const month = String(date.getMonth() + 1).padStart(2, '0')
+      const day = String(date.getDate()).padStart(2, '0')
+      return `${year}-${month}-${day}`
+    }
+
+    const startDateStr = formatLocalDate(startOfWeek)
+    const endDateStr = formatLocalDate(endOfWeek)
 
     // Get all appointments for this clinic
     const { data: appointments, error: aptError } = await supabase
@@ -74,10 +84,15 @@ export async function GET() {
     ) || []
 
     const appointmentsThisWeek = thisWeekAppointments.length
+
+    // Debug: log all appointment dates to help diagnose
+    console.log('Week range:', startDateStr, 'to', endDateStr)
+    console.log('All appointments dates:', appointments?.map(a => a.appointment_date).slice(0, 10))
+    console.log('This week appointments:', thisWeekAppointments.length)
     const appointmentsThisWeekNoShow = thisWeekAppointments.filter(a => a.status === 'no_show').length
 
     // Today's appointments
-    const todayStr = new Date().toISOString().split('T')[0]
+    const todayStr = formatLocalDate(new Date())
     const appointmentsToday = appointments?.filter(a => a.appointment_date === todayStr).length || 0
 
     // Calculate per-doctor stats for this week
