@@ -30,10 +30,33 @@ export async function POST(request: Request) {
       )
     }
 
-    // Store session in database
-    const sessionExpiry = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000) // 30 days
+    // Auto-assign clinic_id if user doesn't have one
     const { createServerSupabaseClient } = await import('@/lib/supabase')
     const supabase = createServerSupabaseClient()
+
+    if (!user.clinic_id && user.role === 'clinic') {
+      // Get the first clinic (default clinic)
+      const { data: clinic } = await supabase
+        .from('clinics')
+        .select('id')
+        .limit(1)
+        .single()
+
+      if (clinic) {
+        // Update user with clinic_id
+        await supabase
+          .from('users')
+          .update({ clinic_id: clinic.id })
+          .eq('id', user.id)
+
+        // Update local user object
+        user.clinic_id = clinic.id
+        console.log(`Auto-assigned clinic_id ${clinic.id} to user ${user.id}`)
+      }
+    }
+
+    // Store session in database
+    const sessionExpiry = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000) // 30 days
 
     await supabase
       .from('sessions')
