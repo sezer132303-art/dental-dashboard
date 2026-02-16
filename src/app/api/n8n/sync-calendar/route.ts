@@ -41,23 +41,70 @@ export async function POST(request: NextRequest) {
     for (const apt of appointments) {
       try {
         // Check if event already synced by google_event_id
-        const { data: existing } = await supabase
+        const { data: existingByEventId } = await supabase
           .from('appointments')
           .select('id, status')
           .eq('google_event_id', apt.googleEventId)
           .maybeSingle()
 
-        if (existing) {
+        if (existingByEventId) {
           // Update if status changed
-          if (existing.status !== apt.status) {
+          if (existingByEventId.status !== apt.status) {
             await supabase
               .from('appointments')
               .update({ status: apt.status })
-              .eq('id', existing.id)
+              .eq('id', existingByEventId.id)
             synced++
           } else {
             skipped++
           }
+          continue
+        }
+
+        // Parse date and time early - needed for duplicate check
+        const startDate = new Date(apt.startTime)
+        const endDate = new Date(apt.endTime)
+
+        const formatLocalDate = (date: Date) => {
+          const year = date.getFullYear()
+          const month = String(date.getMonth() + 1).padStart(2, '0')
+          const day = String(date.getDate()).padStart(2, '0')
+          return `${year}-${month}-${day}`
+        }
+
+        const formatLocalTime = (date: Date) => {
+          const hours = String(date.getHours()).padStart(2, '0')
+          const minutes = String(date.getMinutes()).padStart(2, '0')
+          return `${hours}:${minutes}`
+        }
+
+        const appointmentDate = formatLocalDate(startDate)
+        const startTime = formatLocalTime(startDate)
+        const endTime = formatLocalTime(endDate)
+
+        // Check for existing appointment without google_event_id (created via API)
+        // Match by date, time, and clinic to prevent duplicates
+        const { data: existingByDateTime } = await supabase
+          .from('appointments')
+          .select('id, status, google_event_id, patient_id')
+          .eq('clinic_id', apt.clinicId)
+          .eq('appointment_date', appointmentDate)
+          .eq('start_time', startTime)
+          .is('google_event_id', null)
+          .maybeSingle()
+
+        if (existingByDateTime) {
+          // Update existing appointment with google_event_id to link them
+          await supabase
+            .from('appointments')
+            .update({
+              google_event_id: apt.googleEventId,
+              // Don't overwrite patient data if already set
+            })
+            .eq('id', existingByDateTime.id)
+
+          console.log(`Linked calendar event to existing appointment: ${existingByDateTime.id}`)
+          synced++
           continue
         }
 
@@ -124,28 +171,6 @@ export async function POST(request: NextRequest) {
           errors++
           continue
         }
-
-        // Parse date and time - use consistent timezone handling
-        const startDate = new Date(apt.startTime)
-        const endDate = new Date(apt.endTime)
-
-        // Format date in local timezone (not UTC) to avoid day shifts
-        const formatLocalDate = (date: Date) => {
-          const year = date.getFullYear()
-          const month = String(date.getMonth() + 1).padStart(2, '0')
-          const day = String(date.getDate()).padStart(2, '0')
-          return `${year}-${month}-${day}`
-        }
-
-        const formatLocalTime = (date: Date) => {
-          const hours = String(date.getHours()).padStart(2, '0')
-          const minutes = String(date.getMinutes()).padStart(2, '0')
-          return `${hours}:${minutes}`
-        }
-
-        const appointmentDate = formatLocalDate(startDate)
-        const startTime = formatLocalTime(startDate)
-        const endTime = formatLocalTime(endDate)
 
         // Debug logging
         console.log('Sync appointment:', {
