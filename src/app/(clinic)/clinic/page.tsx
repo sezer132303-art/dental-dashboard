@@ -6,7 +6,6 @@ import {
   TrendingDown,
   Users,
   Calendar,
-  AlertTriangle,
   CheckCircle2,
   Clock,
   Loader2,
@@ -56,9 +55,6 @@ interface Metrics {
   appointmentsThisMonth: number
   appointmentsToday: number
   noShows: number
-  totalAppointments?: number
-  uniqueDateCount?: number
-  appointmentsPerDateSample?: [string, number][]
   doctors: DoctorStats[]
   weekRange?: { start: string; end: string }
   monthRange?: { start: string; end: string }
@@ -141,9 +137,6 @@ export default function ClinicDashboardPage() {
           appointmentsThisMonth: metricsData.appointmentsThisMonth || 0,
           appointmentsToday: metricsData.appointmentsToday || 0,
           noShows: metricsData.noShows || 0,
-          totalAppointments: metricsData.totalAppointments || 0,
-          uniqueDateCount: metricsData.uniqueDateCount || 0,
-          appointmentsPerDateSample: metricsData.appointmentsPerDateSample,
           weekRange: metricsData.weekRange,
           monthRange: metricsData.monthRange,
           today: metricsData.today,
@@ -225,12 +218,6 @@ export default function ClinicDashboardPage() {
             {currentMonthName} {metrics.currentYear}
             {metrics.today && ` | Днес: ${formatDateBG(metrics.today)}`}
           </p>
-          {metrics.totalAppointments !== metrics.uniqueDateCount && metrics.appointmentsPerDateSample && (
-            <p className="text-xs text-orange-600 mt-1">
-              ⚠️ Внимание: {metrics.totalAppointments} записа в системата за {metrics.uniqueDateCount} различни дати.
-              Примерно: {metrics.appointmentsPerDateSample.slice(0, 3).map(([date, count]) => `${formatDateBG(date)}: ${count} бр.`).join(', ')}
-            </p>
-          )}
         </div>
       </div>
 
