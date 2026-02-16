@@ -35,7 +35,16 @@
     {
       "parameters": {
         "method": "GET",
-        "url": "https://dental-dashboard-nu.vercel.app/api/doctors",
+        "url": "=https://dental-dashboard-nu.vercel.app/api/n8n/availability?date={{ $now.plus({days: 1}).format('yyyy-MM-dd') }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-API-Key",
+              "value": "79d22dce33bd515d33124461ecb3202c27e660944ef29b2cb3cdf3396d37c6e4"
+            }
+          ]
+        },
         "options": {}
       },
       "id": "get-doctors",

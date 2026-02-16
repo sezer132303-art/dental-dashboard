@@ -28,7 +28,7 @@ export async function GET(request: NextRequest) {
     // Get doctors (optionally filtered by doctorId)
     let doctorsQuery = supabase
       .from('doctors')
-      .select('id, name, specialty, working_hours, color')
+      .select('id, name, specialty, working_hours, color, google_calendar_id, clinic_id')
       .eq('clinic_id', clinicId)
       .eq('is_active', true)
 
@@ -125,7 +125,9 @@ export async function GET(request: NextRequest) {
         id: d.id,
         name: d.name,
         specialty: d.specialty,
-        color: d.color
+        color: d.color,
+        calendar_id: d.google_calendar_id,
+        clinic_id: d.clinic_id
       }))
     })
 

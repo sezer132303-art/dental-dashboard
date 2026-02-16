@@ -1,10 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase'
+import { validateApiKey } from '@/lib/api-auth'
 
-// Public endpoint for n8n workflows - No authentication required
-// GET /api/n8n/doctors - Returns all active doctors
-// Optional query param: ?clinicId=xxx to filter by clinic
+// GET /api/n8n/doctors - Endpoint for n8n to get doctors
+// Requires API key authentication via header or query param
 export async function GET(request: NextRequest) {
+  // Validate API key
+  const validation = await validateApiKey(request)
+  if (!validation.isValid) {
+    return NextResponse.json({ error: validation.error }, { status: 401 })
+  }
+
   try {
     const { searchParams } = new URL(request.url)
     const clinicId = searchParams.get('clinicId')
