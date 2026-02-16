@@ -86,10 +86,11 @@ export async function GET(request: NextRequest) {
     const lastCompletedAppointment = appointments?.find(a => a.status === 'completed')
 
     // Get most visited doctor
+    type DoctorInfo = { id: string; name: string; specialty: string }
     const doctorVisits: Record<string, { name: string; count: number }> = {}
     appointments?.forEach(apt => {
       if (apt.status === 'completed' && apt.doctor) {
-        const doctor = apt.doctor as { id: string; name: string; specialty: string }
+        const doctor = apt.doctor as unknown as DoctorInfo
         if (!doctorVisits[doctor.id]) {
           doctorVisits[doctor.id] = { name: doctor.name, count: 0 }
         }
@@ -120,7 +121,7 @@ export async function GET(request: NextRequest) {
       lastVisit: lastCompletedAppointment ? {
         date: lastCompletedAppointment.appointment_date,
         type: lastCompletedAppointment.type,
-        doctor: (lastCompletedAppointment.doctor as { name: string })?.name
+        doctor: (lastCompletedAppointment.doctor as unknown as DoctorInfo)?.name
       } : null,
       preferredDoctor: preferredDoctor ? {
         name: preferredDoctor[1].name,
@@ -130,14 +131,14 @@ export async function GET(request: NextRequest) {
         date: apt.appointment_date,
         time: apt.start_time?.substring(0, 5),
         type: apt.type,
-        doctor: (apt.doctor as { name: string })?.name,
+        doctor: (apt.doctor as unknown as DoctorInfo)?.name,
         status: apt.status
       })),
       recentAppointments: appointments?.slice(0, 5).map(apt => ({
         date: apt.appointment_date,
         time: apt.start_time?.substring(0, 5),
         type: apt.type,
-        doctor: (apt.doctor as { name: string })?.name,
+        doctor: (apt.doctor as unknown as DoctorInfo)?.name,
         status: apt.status
       })) || [],
       // AI-friendly summary for the chatbot
@@ -153,9 +154,9 @@ export async function GET(request: NextRequest) {
 function generatePatientSummary(
   patient: { name: string },
   completedVisits: number,
-  lastVisit: { appointment_date: string; type: string; doctor: { name: string } } | null | undefined,
+  lastVisit: { appointment_date: string; type: string; doctor: unknown } | null | undefined,
   preferredDoctor: [string, { name: string; count: number }] | undefined,
-  upcomingAppointments: Array<{ appointment_date: string; start_time: string; doctor: { name: string } }>
+  upcomingAppointments: Array<{ appointment_date: string; start_time: string; doctor: unknown }>
 ): string {
   const parts: string[] = []
 
@@ -167,7 +168,8 @@ function generatePatientSummary(
 
   if (lastVisit) {
     const lastVisitDate = new Date(lastVisit.appointment_date).toLocaleDateString('bg-BG')
-    parts.push(`Последно посещение: ${lastVisitDate} - ${lastVisit.type} при ${(lastVisit.doctor as { name: string })?.name || 'неизвестен лекар'}`)
+    const doctorName = (lastVisit.doctor as { name?: string } | null)?.name || 'неизвестен лекар'
+    parts.push(`Последно посещение: ${lastVisitDate} - ${lastVisit.type} при ${doctorName}`)
   }
 
   if (preferredDoctor) {
