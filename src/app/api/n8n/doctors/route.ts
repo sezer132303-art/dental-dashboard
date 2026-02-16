@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase'
 
-// GET /api/n8n/doctors - Public endpoint for n8n to get doctors
-// This endpoint is specifically for n8n workflows and returns all active doctors
+// Public endpoint for n8n workflows - No authentication required
+// GET /api/n8n/doctors - Returns all active doctors
+// Optional query param: ?clinicId=xxx to filter by clinic
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url)
