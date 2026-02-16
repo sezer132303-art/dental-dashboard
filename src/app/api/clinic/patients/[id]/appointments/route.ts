@@ -72,6 +72,28 @@ export async function GET(
       }
     })
 
+    // Sort: active appointments (scheduled, confirmed) first, then by date descending
+    const statusPriority: Record<string, number> = {
+      'scheduled': 1,
+      'confirmed': 2,
+      'completed': 3,
+      'no_show': 4,
+      'cancelled': 5
+    }
+
+    formattedAppointments.sort((a, b) => {
+      const priorityA = statusPriority[a.status] || 99
+      const priorityB = statusPriority[b.status] || 99
+
+      // First sort by priority (active first)
+      if (priorityA !== priorityB) {
+        return priorityA - priorityB
+      }
+
+      // Then by date descending
+      return new Date(b.appointment_date).getTime() - new Date(a.appointment_date).getTime()
+    })
+
     return NextResponse.json({ appointments: formattedAppointments })
   } catch (error) {
     console.error('Get patient appointments error:', error)

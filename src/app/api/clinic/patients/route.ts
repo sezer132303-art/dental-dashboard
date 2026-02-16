@@ -18,11 +18,12 @@ export async function GET() {
     const supabase = createServerSupabaseClient()
 
     // Get patients from the patients table
+    // Include patients where is_active is true OR is_active is null (for imported/synced patients)
     const { data: patients, error } = await supabase
       .from('patients')
       .select('*')
       .eq('clinic_id', clinicId)
-      .eq('is_active', true)
+      .or('is_active.eq.true,is_active.is.null')
       .order('created_at', { ascending: false })
 
     if (error) {
@@ -43,6 +44,7 @@ export async function GET() {
       const completedAppointments = patientAppointments.filter(a => a.status === 'completed').length
       const cancelledAppointments = patientAppointments.filter(a => a.status === 'cancelled').length
       const noShowCount = patientAppointments.filter(a => a.status === 'no_show').length
+      const scheduledAppointments = patientAppointments.filter(a => a.status === 'scheduled' || a.status === 'confirmed').length
 
       return {
         ...patient,
@@ -51,8 +53,19 @@ export async function GET() {
         total_appointments: totalAppointments,
         completed_appointments: completedAppointments,
         cancelled_appointments: cancelledAppointments,
-        no_show_count: noShowCount
+        no_show_count: noShowCount,
+        scheduled_appointments: scheduledAppointments
       }
+    })
+
+    // Sort: patients with scheduled appointments first, then by last contact
+    patientsWithStats.sort((a, b) => {
+      // First priority: patients with upcoming appointments
+      if (a.scheduled_appointments > 0 && b.scheduled_appointments === 0) return -1
+      if (a.scheduled_appointments === 0 && b.scheduled_appointments > 0) return 1
+
+      // Second priority: by last contact date
+      return new Date(b.last_contact_at).getTime() - new Date(a.last_contact_at).getTime()
     })
 
     return NextResponse.json({
