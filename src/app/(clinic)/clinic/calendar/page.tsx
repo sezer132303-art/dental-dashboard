@@ -619,6 +619,10 @@ export default function ClinicCalendarPage() {
                       {getAppointmentsForDay(day).map((apt) => {
                         const { top, height } = getAppointmentPosition(apt)
                         const doctorColor = apt.doctor?.color || 'bg-blue-500'
+                        // Use doctor color for background, status shown via border/opacity
+                        const isCancelled = apt.status === 'cancelled'
+                        const isCompleted = apt.status === 'completed'
+                        const isNoShow = apt.status === 'no_show'
 
                         return (
                           <div
@@ -626,10 +630,13 @@ export default function ClinicCalendarPage() {
                             onClick={() => handleAppointmentClick(apt)}
                             className={cn(
                               'absolute left-1 right-1 rounded-md px-2 py-1 text-white text-xs overflow-hidden pointer-events-auto cursor-pointer hover:opacity-90 transition hover:shadow-md',
-                              statusColors[apt.status] || doctorColor
+                              doctorColor,
+                              isCancelled && 'opacity-40 line-through',
+                              isCompleted && 'ring-2 ring-green-400 ring-inset',
+                              isNoShow && 'ring-2 ring-red-400 ring-inset'
                             )}
                             style={{ top: `${top}px`, height: `${Math.max(height, 20)}px` }}
-                            title={`${apt.patient?.name || 'Пациент'} - ${apt.type || 'Час'}`}
+                            title={`${apt.patient?.name || 'Пациент'} - ${apt.type || 'Час'} (${apt.doctor?.name || 'Лекар'})`}
                           >
                             <div className="font-medium truncate">
                               {apt.patient?.name || 'Пациент'}
