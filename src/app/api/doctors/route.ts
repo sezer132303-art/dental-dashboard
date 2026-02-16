@@ -5,19 +5,35 @@ import { getAuthorizedClinicId } from '@/lib/session-auth'
 // GET /api/doctors - List doctors for authorized clinic
 export async function GET(request: NextRequest) {
   try {
-    // Check authentication and get authorized clinic
     const { searchParams } = new URL(request.url)
     const requestedClinicId = searchParams.get('clinicId')
 
-    const { clinicId, isAdmin, error: authError } = await getAuthorizedClinicId(requestedClinicId)
+    // Check for n8n API key authentication first
+    const apiKey = request.headers.get('X-API-Key') || request.headers.get('Authorization')?.replace('Bearer ', '')
+    const isN8nAuth = apiKey && apiKey === process.env.N8N_API_KEY
 
-    if (authError) {
-      return NextResponse.json({ error: authError }, { status: 401 })
-    }
+    let clinicId: string | null = null
+    let isAdmin = false
 
-    // Non-admin users MUST have a clinic_id
-    if (!isAdmin && !clinicId) {
-      return NextResponse.json({ error: 'No clinic assigned' }, { status: 403 })
+    if (isN8nAuth) {
+      // n8n API key auth - use requested clinicId or return all
+      clinicId = requestedClinicId
+      isAdmin = true
+    } else {
+      // Session-based authentication
+      const authResult = await getAuthorizedClinicId(requestedClinicId)
+
+      if (authResult.error) {
+        return NextResponse.json({ error: authResult.error }, { status: 401 })
+      }
+
+      clinicId = authResult.clinicId
+      isAdmin = authResult.isAdmin
+
+      // Non-admin users MUST have a clinic_id
+      if (!isAdmin && !clinicId) {
+        return NextResponse.json({ error: 'No clinic assigned' }, { status: 403 })
+      }
     }
 
     const supabase = createServerSupabaseClient()
