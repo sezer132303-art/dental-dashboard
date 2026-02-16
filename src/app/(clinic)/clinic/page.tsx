@@ -31,6 +31,7 @@ interface DoctorStats {
   name: string
   specialty: string | null
   color: string
+  patientsThisMonth: number
   patientsThisWeek: number
   completed: number
   noShow: number
@@ -40,18 +41,11 @@ interface DoctorStats {
 interface MetricsDoctorStats {
   id: string
   name: string
+  patientsThisMonth: number
   patientsThisWeek: number
   completed: number
   noShow: number
   attendanceRate: number
-}
-
-interface DebugInfo {
-  rawDates?: string[]
-  normalizedDates?: string[]
-  allDates?: string[]
-  thisWeekSample?: { date: string; status: string }[]
-  dateComparison?: { date: string; inRange: boolean; comparison: string }[]
 }
 
 interface Metrics {
@@ -59,13 +53,16 @@ interface Metrics {
   attendanceChange: number
   totalPatients: number
   appointmentsThisWeek: number
+  appointmentsThisMonth: number
   appointmentsToday: number
   noShows: number
   totalAppointments?: number
   doctors: DoctorStats[]
   weekRange?: { start: string; end: string }
+  monthRange?: { start: string; end: string }
   today?: string
-  _debug?: DebugInfo
+  currentMonth?: number
+  currentYear?: number
 }
 
 const COLORS = ['#3B82F6', '#8B5CF6', '#10B981', '#F59E0B', '#EF4444', '#EC4899']
@@ -139,12 +136,15 @@ export default function ClinicDashboardPage() {
           attendanceChange: 0,
           totalPatients: metricsData.totalPatients || 0,
           appointmentsThisWeek: metricsData.appointmentsThisWeek || 0,
+          appointmentsThisMonth: metricsData.appointmentsThisMonth || 0,
           appointmentsToday: metricsData.appointmentsToday || 0,
           noShows: metricsData.noShows || 0,
           totalAppointments: metricsData.totalAppointments || 0,
           weekRange: metricsData.weekRange,
+          monthRange: metricsData.monthRange,
           today: metricsData.today,
-          _debug: metricsData._debug,
+          currentMonth: metricsData.currentMonth,
+          currentYear: metricsData.currentYear,
           doctors: (doctorsData.doctors || []).map((d: any) => {
             const stats = doctorStatsMap.get(d.id)
             return {
@@ -152,6 +152,7 @@ export default function ClinicDashboardPage() {
               name: d.name,
               specialty: d.specialty,
               color: d.color || 'bg-blue-500',
+              patientsThisMonth: stats?.patientsThisMonth || 0,
               patientsThisWeek: stats?.patientsThisWeek || 0,
               completed: stats?.completed || 0,
               noShow: stats?.noShow || 0,
@@ -190,13 +191,18 @@ export default function ClinicDashboardPage() {
     )
   }
 
-  // Prepare data for charts
+  // Prepare data for charts - use monthly data
   const doctorChartData = metrics.doctors.map(d => ({
     name: d.name.replace('д-р ', ''),
-    appointments: d.patientsThisWeek
+    appointments: d.patientsThisMonth
   }))
 
-  const totalDoctorAppointments = metrics.doctors.reduce((sum, d) => sum + d.patientsThisWeek, 0)
+  const totalDoctorAppointments = metrics.doctors.reduce((sum, d) => sum + d.patientsThisMonth, 0)
+
+  // Bulgarian month names
+  const monthNames = ['Януари', 'Февруари', 'Март', 'Април', 'Май', 'Юни',
+                      'Юли', 'Август', 'Септември', 'Октомври', 'Ноември', 'Декември']
+  const currentMonthName = metrics.currentMonth ? monthNames[metrics.currentMonth - 1] : ''
 
   // Format date for display
   const formatDateBG = (dateStr: string) => {
@@ -207,29 +213,24 @@ export default function ClinicDashboardPage() {
 
   return (
     <div className="space-y-6">
-      {/* Header with week range */}
+      {/* Header */}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Табло</h1>
-          {metrics.weekRange && (
-            <p className="text-sm text-gray-500">
-              Седмица: {formatDateBG(metrics.weekRange.start)} - {formatDateBG(metrics.weekRange.end)}
-              {metrics.today && ` | Днес: ${formatDateBG(metrics.today)}`}
-              {metrics.totalAppointments !== undefined && ` | Общо часове в системата: ${metrics.totalAppointments}`}
-            </p>
-          )}
+          <p className="text-sm text-gray-500">
+            {currentMonthName} {metrics.currentYear}
+            {metrics.today && ` | Днес: ${formatDateBG(metrics.today)}`}
+          </p>
         </div>
       </div>
 
       {/* KPI Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
         <KpiCard
-          title="Процент присъствие"
-          value={metrics.attendanceRate}
-          suffix="%"
-          change={metrics.attendanceChange}
-          icon={CheckCircle2}
-          iconBg="bg-green-500"
+          title="Часове този месец"
+          value={metrics.appointmentsThisMonth}
+          icon={Calendar}
+          iconBg="bg-purple-500"
         />
         <KpiCard
           title="Часове днес"
@@ -238,10 +239,11 @@ export default function ClinicDashboardPage() {
           iconBg="bg-blue-500"
         />
         <KpiCard
-          title="Часове тази седмица"
-          value={metrics.appointmentsThisWeek}
-          icon={Calendar}
-          iconBg="bg-purple-500"
+          title="Процент присъствие"
+          value={metrics.attendanceRate}
+          suffix="%"
+          icon={CheckCircle2}
+          iconBg="bg-green-500"
         />
         <KpiCard
           title="Общо пациенти"
@@ -256,7 +258,7 @@ export default function ClinicDashboardPage() {
           iconBg="bg-cyan-500"
         />
         <KpiCard
-          title="Неявявания (седмица)"
+          title="Неявявания (месец)"
           value={metrics.noShows}
           icon={AlertTriangle}
           iconBg="bg-red-500"
@@ -268,7 +270,7 @@ export default function ClinicDashboardPage() {
         {/* Doctor Appointments Chart */}
         <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
           <h3 className="text-lg font-semibold text-gray-900 mb-4">
-            Часове по лекари (тази седмица)
+            Часове по лекари ({currentMonthName})
           </h3>
           {doctorChartData.length > 0 && totalDoctorAppointments > 0 ? (
             <ResponsiveContainer width="100%" height={300}>
@@ -291,23 +293,8 @@ export default function ClinicDashboardPage() {
               </BarChart>
             </ResponsiveContainer>
           ) : (
-            <div className="h-[300px] flex flex-col items-center justify-center text-gray-400 text-xs">
-              <p className="text-base mb-2">Няма данни за тази седмица</p>
-              <p>
-                {metrics.appointmentsThisWeek} часове тази седмица | {metrics.doctors.length} лекари | {metrics.totalAppointments} общо часове
-              </p>
-              {metrics._debug?.allDates && metrics._debug.allDates.length > 0 && (
-                <div className="mt-2 text-left max-w-md">
-                  <p>Всички дати в системата: {metrics._debug.allDates.join(', ')}</p>
-                  {metrics._debug.dateComparison && (
-                    <p className="mt-1">
-                      Проверка: {metrics._debug.dateComparison.map(d =>
-                        `${d.date}=${d.inRange ? 'ДА' : 'НЕ'}`
-                      ).join(', ')}
-                    </p>
-                  )}
-                </div>
-              )}
+            <div className="h-[300px] flex flex-col items-center justify-center text-gray-400">
+              <p>Няма записани часове за {currentMonthName}</p>
             </div>
           )}
         </div>
@@ -315,7 +302,7 @@ export default function ClinicDashboardPage() {
         {/* Doctor Distribution Pie */}
         <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
           <h3 className="text-lg font-semibold text-gray-900 mb-4">
-            Разпределение по лекари
+            Разпределение по лекари ({currentMonthName})
           </h3>
           {doctorChartData.length > 0 && totalDoctorAppointments > 0 ? (
             <ResponsiveContainer width="100%" height={300}>
@@ -346,7 +333,7 @@ export default function ClinicDashboardPage() {
             </ResponsiveContainer>
           ) : (
             <div className="h-[300px] flex items-center justify-center text-gray-400">
-              Няма данни за тази седмица
+              Няма записани часове за {currentMonthName}
             </div>
           )}
         </div>
@@ -356,7 +343,7 @@ export default function ClinicDashboardPage() {
       <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
         <div className="px-6 py-4 border-b border-gray-100">
           <h3 className="text-lg font-semibold text-gray-900">
-            Статистика по лекари (тази седмица)
+            Статистика по лекари ({currentMonthName})
           </h3>
         </div>
         {metrics.doctors.length > 0 ? (
@@ -371,7 +358,7 @@ export default function ClinicDashboardPage() {
                     Специалност
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">
-                    Общо часове
+                    Часове (месец)
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">
                     Завършени
@@ -404,7 +391,7 @@ export default function ClinicDashboardPage() {
                       {doctor.specialty || 'Общ стоматолог'}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-gray-900 font-medium">
-                      {doctor.patientsThisWeek}
+                      {doctor.patientsThisMonth}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-green-600 font-medium">
                       {doctor.completed}

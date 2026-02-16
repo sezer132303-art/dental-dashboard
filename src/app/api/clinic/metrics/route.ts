@@ -53,6 +53,12 @@ export async function GET() {
     const endDateStr = formatDate(endOfWeek)
     const todayStr = todayInBulgaria
 
+    // Calculate month boundaries
+    const startOfMonth = new Date(year, month - 1, 1)
+    const endOfMonth = new Date(year, month, 0) // Last day of current month
+    const startMonthStr = formatDate(startOfMonth)
+    const endMonthStr = formatDate(endOfMonth)
+
     // Get all appointments for this clinic
     const { data: rawAppointments, error: aptError } = await supabase
       .from('appointments')
@@ -113,35 +119,38 @@ export async function GET() {
     const thisWeekAppointments = appointments.filter(a =>
       a.appointment_date >= startDateStr && a.appointment_date <= endDateStr
     )
-
     const appointmentsThisWeek = thisWeekAppointments.length
 
-    // Debug: log all appointment dates to help diagnose
-    console.log('Week range:', startDateStr, 'to', endDateStr)
-    console.log('All appointments dates (normalized):', appointments.map(a => a.appointment_date).slice(0, 10))
-    console.log('This week appointments:', thisWeekAppointments.length)
+    // Filter appointments for this month
+    const thisMonthAppointments = appointments.filter(a =>
+      a.appointment_date >= startMonthStr && a.appointment_date <= endMonthStr
+    )
+    const appointmentsThisMonth = thisMonthAppointments.length
 
     // Today's appointments (todayStr already defined above using Bulgaria timezone)
     const appointmentsToday = appointments.filter(a => a.appointment_date === todayStr).length
 
-    // Calculate per-doctor stats for this week
+    // Calculate per-doctor stats for this month
     const doctorStats = doctors?.map(doctor => {
       const doctorAppointments = appointments.filter(a => a.doctor_id === doctor.id)
-      const weekAppointments = doctorAppointments.filter(a =>
-        a.appointment_date >= startDateStr && a.appointment_date <= endDateStr
+      const monthAppointments = doctorAppointments.filter(a =>
+        a.appointment_date >= startMonthStr && a.appointment_date <= endMonthStr
       )
 
       return {
         id: doctor.id,
         name: doctor.name,
-        patientsThisWeek: weekAppointments.length,
-        completed: weekAppointments.filter(a => a.status === 'completed').length,
-        noShow: weekAppointments.filter(a => a.status === 'no_show').length,
+        patientsThisMonth: monthAppointments.length,
+        patientsThisWeek: doctorAppointments.filter(a =>
+          a.appointment_date >= startDateStr && a.appointment_date <= endDateStr
+        ).length,
+        completed: monthAppointments.filter(a => a.status === 'completed').length,
+        noShow: monthAppointments.filter(a => a.status === 'no_show').length,
         attendanceRate: (() => {
-          const weekCompleted = weekAppointments.filter(a => a.status === 'completed').length
-          const weekNoShow = weekAppointments.filter(a => a.status === 'no_show').length
-          const total = weekCompleted + weekNoShow
-          return total > 0 ? Math.round((weekCompleted / total) * 100) : 100
+          const monthCompleted = monthAppointments.filter(a => a.status === 'completed').length
+          const monthNoShow = monthAppointments.filter(a => a.status === 'no_show').length
+          const total = monthCompleted + monthNoShow
+          return total > 0 ? Math.round((monthCompleted / total) * 100) : 100
         })()
       }
     }) || []
@@ -162,6 +171,9 @@ export async function GET() {
     // Weekly no-shows
     const noShowsThisWeek = thisWeekAppointments.filter(a => a.status === 'no_show').length
 
+    // Monthly no-shows
+    const noShowsThisMonth = thisMonthAppointments.filter(a => a.status === 'no_show').length
+
     return NextResponse.json({
       totalAppointments,
       completedAppointments,
@@ -169,33 +181,21 @@ export async function GET() {
       scheduledAppointments,
       confirmedAppointments,
       pendingAppointments: scheduledAppointments + confirmedAppointments,
-      noShows: noShowsThisWeek, // Changed to weekly no-shows for dashboard
-      noShowsTotal: noShows, // Keep total for other uses
+      noShows: noShowsThisMonth,
+      noShowsTotal: noShows,
       totalPatients: totalPatients || 0,
       activeConversations,
       attendanceRate,
       appointmentsThisWeek,
+      appointmentsThisMonth,
       appointmentsToday,
       doctors: doctorStats,
-      // Debug info
+      // Date info for display
       weekRange: { start: startDateStr, end: endDateStr },
+      monthRange: { start: startMonthStr, end: endMonthStr },
       today: todayStr,
-      serverTime: new Date().toISOString(),
-      // Extra debug: sample of appointment dates for troubleshooting
-      _debug: {
-        rawDates: rawAppointments?.slice(0, 5).map(a => a.appointment_date),
-        normalizedDates: appointments.slice(0, 5).map(a => a.appointment_date),
-        allDates: appointments.map(a => a.appointment_date),
-        thisWeekSample: thisWeekAppointments.slice(0, 5).map(a => ({
-          date: a.appointment_date,
-          status: a.status
-        })),
-        dateComparison: appointments.slice(0, 5).map(a => ({
-          date: a.appointment_date,
-          inRange: a.appointment_date >= startDateStr && a.appointment_date <= endDateStr,
-          comparison: `${a.appointment_date} >= ${startDateStr} && ${a.appointment_date} <= ${endDateStr}`
-        }))
-      }
+      currentMonth: month,
+      currentYear: year
     })
   } catch (error) {
     console.error('Clinic metrics error:', error)
