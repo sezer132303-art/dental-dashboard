@@ -55,6 +55,7 @@ export async function GET(request: NextRequest) {
 
     if (!doctors?.length) {
       return NextResponse.json({
+        version: 'v2-fixed',
         available: false,
         message: 'Няма налични лекари',
         slots: [],
@@ -64,6 +65,7 @@ export async function GET(request: NextRequest) {
 
     // Return doctors list - slot calculation removed since working_hours doesn't exist
     return NextResponse.json({
+      version: 'v2-fixed',
       available: true,
       slotsCount: 0,
       slots: [],
