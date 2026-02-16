@@ -46,6 +46,11 @@ interface MetricsDoctorStats {
   attendanceRate: number
 }
 
+interface DebugInfo {
+  sampleDates?: string[]
+  thisWeekSample?: { date: string; status: string }[]
+}
+
 interface Metrics {
   attendanceRate: number
   attendanceChange: number
@@ -53,9 +58,11 @@ interface Metrics {
   appointmentsThisWeek: number
   appointmentsToday: number
   noShows: number
+  totalAppointments?: number
   doctors: DoctorStats[]
   weekRange?: { start: string; end: string }
   today?: string
+  _debug?: DebugInfo
 }
 
 const COLORS = ['#3B82F6', '#8B5CF6', '#10B981', '#F59E0B', '#EF4444', '#EC4899']
@@ -131,8 +138,10 @@ export default function ClinicDashboardPage() {
           appointmentsThisWeek: metricsData.appointmentsThisWeek || 0,
           appointmentsToday: metricsData.appointmentsToday || 0,
           noShows: metricsData.noShows || 0,
+          totalAppointments: metricsData.totalAppointments || 0,
           weekRange: metricsData.weekRange,
           today: metricsData.today,
+          _debug: metricsData._debug,
           doctors: (doctorsData.doctors || []).map((d: any) => {
             const stats = doctorStatsMap.get(d.id)
             return {
@@ -203,6 +212,7 @@ export default function ClinicDashboardPage() {
             <p className="text-sm text-gray-500">
               Седмица: {formatDateBG(metrics.weekRange.start)} - {formatDateBG(metrics.weekRange.end)}
               {metrics.today && ` | Днес: ${formatDateBG(metrics.today)}`}
+              {metrics.totalAppointments !== undefined && ` | Общо часове в системата: ${metrics.totalAppointments}`}
             </p>
           )}
         </div>
@@ -278,8 +288,16 @@ export default function ClinicDashboardPage() {
               </BarChart>
             </ResponsiveContainer>
           ) : (
-            <div className="h-[300px] flex items-center justify-center text-gray-400">
-              Няма данни за тази седмица
+            <div className="h-[300px] flex flex-col items-center justify-center text-gray-400">
+              <p>Няма данни за тази седмица</p>
+              <p className="text-xs mt-2">
+                {metrics.appointmentsThisWeek} часове тази седмица | {metrics.doctors.length} лекари
+              </p>
+              {metrics._debug?.sampleDates && metrics._debug.sampleDates.length > 0 && (
+                <p className="text-xs mt-1">
+                  Примерни дати: {metrics._debug.sampleDates.join(', ')}
+                </p>
+              )}
             </div>
           )}
         </div>

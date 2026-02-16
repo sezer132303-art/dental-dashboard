@@ -54,7 +54,7 @@ export async function GET() {
     const todayStr = todayInBulgaria
 
     // Get all appointments for this clinic
-    const { data: appointments, error: aptError } = await supabase
+    const { data: rawAppointments, error: aptError } = await supabase
       .from('appointments')
       .select('id, status, doctor_id, appointment_date')
       .eq('clinic_id', clinicId)
@@ -63,12 +63,31 @@ export async function GET() {
       console.error('Appointments error:', aptError)
     }
 
-    const totalAppointments = appointments?.length || 0
-    const completedAppointments = appointments?.filter(a => a.status === 'completed').length || 0
-    const cancelledAppointments = appointments?.filter(a => a.status === 'cancelled').length || 0
-    const noShows = appointments?.filter(a => a.status === 'no_show').length || 0
-    const scheduledAppointments = appointments?.filter(a => a.status === 'scheduled').length || 0
-    const confirmedAppointments = appointments?.filter(a => a.status === 'confirmed').length || 0
+    // Normalize appointment_date to YYYY-MM-DD format (handle both date and datetime formats)
+    const normalizeDate = (dateValue: string | null): string => {
+      if (!dateValue) return ''
+      // If it's an ISO datetime string, extract just the date part
+      if (dateValue.includes('T')) {
+        return dateValue.split('T')[0]
+      }
+      // If it already contains time info with space separator
+      if (dateValue.includes(' ')) {
+        return dateValue.split(' ')[0]
+      }
+      return dateValue
+    }
+
+    const appointments = rawAppointments?.map(a => ({
+      ...a,
+      appointment_date: normalizeDate(a.appointment_date)
+    })) || []
+
+    const totalAppointments = appointments.length
+    const completedAppointments = appointments.filter(a => a.status === 'completed').length
+    const cancelledAppointments = appointments.filter(a => a.status === 'cancelled').length
+    const noShows = appointments.filter(a => a.status === 'no_show').length
+    const scheduledAppointments = appointments.filter(a => a.status === 'scheduled').length
+    const confirmedAppointments = appointments.filter(a => a.status === 'confirmed').length
 
     // Calculate attendance rate
     const attended = completedAppointments
@@ -91,24 +110,23 @@ export async function GET() {
       .eq('is_active', true)
 
     // Filter appointments for this week
-    const thisWeekAppointments = appointments?.filter(a =>
+    const thisWeekAppointments = appointments.filter(a =>
       a.appointment_date >= startDateStr && a.appointment_date <= endDateStr
-    ) || []
+    )
 
     const appointmentsThisWeek = thisWeekAppointments.length
 
     // Debug: log all appointment dates to help diagnose
     console.log('Week range:', startDateStr, 'to', endDateStr)
-    console.log('All appointments dates:', appointments?.map(a => a.appointment_date).slice(0, 10))
+    console.log('All appointments dates (normalized):', appointments.map(a => a.appointment_date).slice(0, 10))
     console.log('This week appointments:', thisWeekAppointments.length)
-    const appointmentsThisWeekNoShow = thisWeekAppointments.filter(a => a.status === 'no_show').length
 
     // Today's appointments (todayStr already defined above using Bulgaria timezone)
-    const appointmentsToday = appointments?.filter(a => a.appointment_date === todayStr).length || 0
+    const appointmentsToday = appointments.filter(a => a.appointment_date === todayStr).length
 
     // Calculate per-doctor stats for this week
     const doctorStats = doctors?.map(doctor => {
-      const doctorAppointments = appointments?.filter(a => a.doctor_id === doctor.id) || []
+      const doctorAppointments = appointments.filter(a => a.doctor_id === doctor.id)
       const weekAppointments = doctorAppointments.filter(a =>
         a.appointment_date >= startDateStr && a.appointment_date <= endDateStr
       )
@@ -162,7 +180,15 @@ export async function GET() {
       // Debug info
       weekRange: { start: startDateStr, end: endDateStr },
       today: todayStr,
-      serverTime: new Date().toISOString()
+      serverTime: new Date().toISOString(),
+      // Extra debug: sample of appointment dates for troubleshooting
+      _debug: {
+        sampleDates: appointments.slice(0, 5).map(a => a.appointment_date),
+        thisWeekSample: thisWeekAppointments.slice(0, 5).map(a => ({
+          date: a.appointment_date,
+          status: a.status
+        }))
+      }
     })
   } catch (error) {
     console.error('Clinic metrics error:', error)
