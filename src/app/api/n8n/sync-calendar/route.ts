@@ -156,10 +156,10 @@ export async function POST(request: NextRequest) {
           endTime
         })
 
-        // Create appointment
+        // Create or update appointment (upsert to prevent duplicates)
         const { error: insertError } = await supabase
           .from('appointments')
-          .insert({
+          .upsert({
             clinic_id: apt.clinicId,
             doctor_id: doctorId,
             patient_id: patientId,
@@ -171,6 +171,9 @@ export async function POST(request: NextRequest) {
             source: 'google_calendar',
             google_event_id: apt.googleEventId,
             notes: `Синхронизирано от Google Calendar: ${apt.patientName}`
+          }, {
+            onConflict: 'clinic_id,google_event_id',
+            ignoreDuplicates: false
           })
 
         if (insertError) {
