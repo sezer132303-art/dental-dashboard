@@ -58,16 +58,19 @@ export async function GET(
     }
 
     // Format response
-    const formattedAppointments = appointments.map(apt => ({
-      id: apt.id,
-      appointment_date: apt.appointment_date,
-      start_time: apt.start_time,
-      end_time: apt.end_time,
-      status: apt.status,
-      type: apt.type,
-      notes: apt.notes,
-      doctor_name: (apt.doctor as { name: string } | null)?.name || null
-    }))
+    const formattedAppointments = appointments.map(apt => {
+      const doctor = apt.doctor as unknown as { id: string; name: string } | null
+      return {
+        id: apt.id,
+        appointment_date: apt.appointment_date,
+        start_time: apt.start_time,
+        end_time: apt.end_time,
+        status: apt.status,
+        type: apt.type,
+        notes: apt.notes,
+        doctor_name: doctor?.name || null
+      }
+    })
 
     return NextResponse.json({ appointments: formattedAppointments })
   } catch (error) {
