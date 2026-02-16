@@ -1,17 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase'
-import { getClinicUser } from '@/lib/clinic-auth'
+import { getAuthorizedClinicId } from '@/lib/session-auth'
 
 export async function GET(request: NextRequest) {
   try {
-    const user = await getClinicUser()
+    // Use the same auth as admin panel - works for both admin and clinic users
+    const { clinicId, isAdmin, error: authError } = await getAuthorizedClinicId()
 
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    if (authError) {
+      return NextResponse.json({ error: authError }, { status: 401 })
     }
 
-    const clinicId = user.clinic_id
-    if (!clinicId) {
+    // For non-admin users, clinic_id is required
+    if (!clinicId && !isAdmin) {
       return NextResponse.json({ error: 'No clinic assigned' }, { status: 403 })
     }
 
@@ -34,9 +35,13 @@ export async function GET(request: NextRequest) {
         doctor:doctors(id, name, color, specialty),
         patient:patients(id, name, phone)
       `, { count: 'exact' })
-      .eq('clinic_id', clinicId)
       .order('appointment_date', { ascending: true })
       .order('start_time', { ascending: true })
+
+    // Filter by clinic_id (admin can see all if no clinicId specified)
+    if (clinicId) {
+      query = query.eq('clinic_id', clinicId)
+    }
 
     // Date range filter
     if (startDate) {
