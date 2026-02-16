@@ -16,7 +16,7 @@ export async function GET(request: NextRequest) {
 
     const doctorId = searchParams.get('doctorId')
     const date = searchParams.get('date') // YYYY-MM-DD
-    const clinicId = searchParams.get('clinicId') || getDefaultClinicId()
+    const clinicId = searchParams.get('clinicId')
 
     if (!date) {
       return NextResponse.json(
@@ -25,12 +25,16 @@ export async function GET(request: NextRequest) {
       )
     }
 
-    // Get doctors (optionally filtered by doctorId)
+    // Get doctors (optionally filtered by doctorId and/or clinicId)
     let doctorsQuery = supabase
       .from('doctors')
       .select('id, name, specialty, working_hours, color, google_calendar_id, clinic_id')
-      .eq('clinic_id', clinicId)
       .eq('is_active', true)
+
+    // Only filter by clinic if provided
+    if (clinicId) {
+      doctorsQuery = doctorsQuery.eq('clinic_id', clinicId)
+    }
 
     if (doctorId) {
       doctorsQuery = doctorsQuery.eq('id', doctorId)
@@ -48,12 +52,17 @@ export async function GET(request: NextRequest) {
     }
 
     // Get existing appointments for the date
-    const { data: appointments, error: apptError } = await supabase
+    let appointmentsQuery = supabase
       .from('appointments')
       .select('doctor_id, start_time, end_time')
       .eq('appointment_date', date)
-      .eq('clinic_id', clinicId)
       .neq('status', 'cancelled')
+
+    if (clinicId) {
+      appointmentsQuery = appointmentsQuery.eq('clinic_id', clinicId)
+    }
+
+    const { data: appointments, error: apptError } = await appointmentsQuery
 
     if (apptError) {
       throw apptError
