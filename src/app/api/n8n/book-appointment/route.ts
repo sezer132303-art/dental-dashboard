@@ -73,12 +73,28 @@ export async function POST(request: NextRequest) {
       patient = newPatient
     }
 
-    // Calculate end time if not provided (default 30 minutes)
+    // Look up service duration from appointment_types table
+    let durationMinutes = 30 // Default
+    if (type) {
+      const { data: appointmentType } = await supabase
+        .from('appointment_types')
+        .select('duration_minutes')
+        .eq('clinic_id', effectiveClinicId)
+        .ilike('name', `%${type}%`)
+        .single()
+
+      if (appointmentType?.duration_minutes) {
+        durationMinutes = appointmentType.duration_minutes
+      }
+    }
+
+    // Calculate end time based on service duration
     const calculatedEndTime = endTime || (() => {
       const [h, m] = startTime.split(':').map(Number)
-      const endMinutes = m + 30
-      const endHours = h + Math.floor(endMinutes / 60)
-      return `${endHours.toString().padStart(2, '0')}:${(endMinutes % 60).toString().padStart(2, '0')}`
+      const totalMinutes = h * 60 + m + durationMinutes
+      const endHours = Math.floor(totalMinutes / 60)
+      const endMins = totalMinutes % 60
+      return `${endHours.toString().padStart(2, '0')}:${endMins.toString().padStart(2, '0')}`
     })()
 
     // Check for conflicts

@@ -7,13 +7,17 @@ export async function GET(request: NextRequest) {
     // Use the same auth as admin panel - works for both admin and clinic users
     const { clinicId, isAdmin, error: authError } = await getAuthorizedClinicId()
 
-    // TEMPORARY: If auth fails, use default clinic for testing
-    let effectiveClinicId = clinicId
-    if (authError || (!clinicId && !isAdmin)) {
-      console.log('[Clinic API] Auth failed, using default clinic for testing')
-      // Default clinic ID
-      effectiveClinicId = '9c969515-8642-4580-9b7b-cd1343e57bee'
+    // Require authentication
+    if (authError) {
+      return NextResponse.json({ error: authError }, { status: 401 })
     }
+
+    // Clinic users must have a clinic_id assigned
+    if (!isAdmin && !clinicId) {
+      return NextResponse.json({ error: 'No clinic assigned to user' }, { status: 403 })
+    }
+
+    const effectiveClinicId = clinicId
 
     const supabase = createServerSupabaseClient()
     const { searchParams } = new URL(request.url)

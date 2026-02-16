@@ -636,18 +636,27 @@ export default function ClinicCalendarPage() {
                               isNoShow && 'ring-2 ring-red-400 ring-inset'
                             )}
                             style={{ top: `${top}px`, height: `${Math.max(height, 20)}px` }}
-                            title={`${apt.patient?.name || 'Пациент'} - ${apt.type || 'Час'} (${apt.doctor?.name || 'Лекар'})`}
+                            title={`${apt.patient?.name || 'Пациент'} - ${apt.type || 'Преглед'} - ${apt.start_time.slice(0, 5)}`}
                           >
-                            <div className="font-medium truncate">
-                              {apt.patient?.name || 'Пациент'}
+                            {/* Always show time */}
+                            <div className="font-semibold">
+                              {apt.start_time.slice(0, 5)}
                             </div>
-                            {height > 30 && (
-                              <div className="text-white/80 truncate">
-                                {apt.start_time.slice(0, 5)} - {apt.end_time.slice(0, 5)}
+                            {/* Show patient name if space */}
+                            {height > 25 && (
+                              <div className="font-medium truncate">
+                                {apt.patient?.name || 'Пациент'}
                               </div>
                             )}
-                            {height > 50 && apt.doctor && !selectedDoctor && (
-                              <div className="text-white/80 truncate">
+                            {/* Show service type if more space */}
+                            {height > 45 && (
+                              <div className="text-white/80 truncate text-[10px]">
+                                {apt.type || 'Преглед'}
+                              </div>
+                            )}
+                            {/* Show doctor if even more space and viewing all doctors */}
+                            {height > 60 && apt.doctor && !selectedDoctor && (
+                              <div className="text-white/80 truncate text-[10px]">
                                 {apt.doctor.name}
                               </div>
                             )}
