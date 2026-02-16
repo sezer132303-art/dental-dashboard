@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { Users, Search, Phone, Calendar, CheckCircle, XCircle, X, Loader2, Edit2, Mail, FileText } from 'lucide-react'
+import { Users, Search, Phone, Calendar, CheckCircle, XCircle, X, Loader2, Edit2, Mail, FileText, ChevronDown } from 'lucide-react'
 
 interface Patient {
   id: string
@@ -27,6 +27,14 @@ interface Appointment {
   doctor_name?: string
 }
 
+const statusOptions = [
+  { value: 'scheduled', label: 'Насрочен', color: 'bg-blue-100 text-blue-700' },
+  { value: 'confirmed', label: 'Потвърден', color: 'bg-indigo-100 text-indigo-700' },
+  { value: 'completed', label: 'Завършен', color: 'bg-green-100 text-green-700' },
+  { value: 'no_show', label: 'Неявяване', color: 'bg-red-100 text-red-700' },
+  { value: 'cancelled', label: 'Отменен', color: 'bg-gray-100 text-gray-700' }
+]
+
 export default function ClinicPatients() {
   const [patients, setPatients] = useState<Patient[]>([])
   const [loading, setLoading] = useState(true)
@@ -42,6 +50,8 @@ export default function ClinicPatients() {
     email: '',
     notes: ''
   })
+  const [updatingAppointmentId, setUpdatingAppointmentId] = useState<string | null>(null)
+  const [openStatusDropdown, setOpenStatusDropdown] = useState<string | null>(null)
 
   useEffect(() => {
     fetchPatients()
@@ -100,7 +110,6 @@ export default function ClinicPatients() {
       })
 
       if (response.ok) {
-        // Update local state
         setPatients(patients.map(p =>
           p.id === selectedPatient.id
             ? { ...p, ...editForm }
@@ -120,6 +129,41 @@ export default function ClinicPatients() {
     }
   }
 
+  async function handleAppointmentStatusChange(appointmentId: string, newStatus: string) {
+    setUpdatingAppointmentId(appointmentId)
+    setOpenStatusDropdown(null)
+
+    try {
+      const response = await fetch(`/api/clinic/appointments/${appointmentId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: newStatus })
+      })
+
+      if (response.ok) {
+        // Update local state
+        setAppointments(appointments.map(apt =>
+          apt.id === appointmentId
+            ? { ...apt, status: newStatus }
+            : apt
+        ))
+
+        // Refresh patient stats
+        if (selectedPatient) {
+          fetchPatients()
+        }
+      } else {
+        const data = await response.json()
+        alert(data.error || 'Грешка при промяна на статуса')
+      }
+    } catch (error) {
+      console.error('Status update error:', error)
+      alert('Грешка при промяна на статуса')
+    } finally {
+      setUpdatingAppointmentId(null)
+    }
+  }
+
   const filteredPatients = patients.filter(patient =>
     patient.name?.toLowerCase().includes(search.toLowerCase()) ||
     patient.phone?.includes(search)
@@ -134,25 +178,13 @@ export default function ClinicPatients() {
   }
 
   const getStatusLabel = (status: string) => {
-    const labels: Record<string, string> = {
-      'scheduled': 'Насрочен',
-      'confirmed': 'Потвърден',
-      'completed': 'Завършен',
-      'cancelled': 'Отменен',
-      'no_show': 'Неявяване'
-    }
-    return labels[status] || status
+    const option = statusOptions.find(o => o.value === status)
+    return option?.label || status
   }
 
   const getStatusColor = (status: string) => {
-    const colors: Record<string, string> = {
-      'scheduled': 'bg-blue-100 text-blue-700',
-      'confirmed': 'bg-green-100 text-green-700',
-      'completed': 'bg-gray-100 text-gray-700',
-      'cancelled': 'bg-red-100 text-red-700',
-      'no_show': 'bg-orange-100 text-orange-700'
-    }
-    return colors[status] || 'bg-gray-100 text-gray-700'
+    const option = statusOptions.find(o => o.value === status)
+    return option?.color || 'bg-gray-100 text-gray-700'
   }
 
   return (
@@ -277,6 +309,7 @@ export default function ClinicPatients() {
                   onClick={() => {
                     setShowModal(false)
                     setEditMode(false)
+                    setOpenStatusDropdown(null)
                   }}
                   className="p-2 hover:bg-gray-100 rounded-lg"
                 >
@@ -375,7 +408,7 @@ export default function ClinicPatients() {
                 </div>
               )}
 
-              {/* Appointments History */}
+              {/* Appointments History with Status Change */}
               <div>
                 <h3 className="font-semibold text-gray-900 mb-3">История на часовете</h3>
                 {loadingAppointments ? (
@@ -399,9 +432,42 @@ export default function ClinicPatients() {
                             {apt.type} {apt.doctor_name && `• ${apt.doctor_name}`}
                           </p>
                         </div>
-                        <span className={`px-2 py-1 rounded text-xs font-medium ${getStatusColor(apt.status)}`}>
-                          {getStatusLabel(apt.status)}
-                        </span>
+
+                        {/* Status Dropdown */}
+                        <div className="relative">
+                          <button
+                            onClick={() => setOpenStatusDropdown(openStatusDropdown === apt.id ? null : apt.id)}
+                            disabled={updatingAppointmentId === apt.id}
+                            className={`px-3 py-1.5 rounded text-xs font-medium flex items-center gap-1 transition ${getStatusColor(apt.status)} ${updatingAppointmentId === apt.id ? 'opacity-50' : 'hover:opacity-80'}`}
+                          >
+                            {updatingAppointmentId === apt.id ? (
+                              <Loader2 className="w-3 h-3 animate-spin" />
+                            ) : (
+                              <>
+                                {getStatusLabel(apt.status)}
+                                <ChevronDown className="w-3 h-3" />
+                              </>
+                            )}
+                          </button>
+
+                          {openStatusDropdown === apt.id && (
+                            <div className="absolute right-0 top-full mt-1 bg-white rounded-lg shadow-lg border z-10 py-1 min-w-[140px]">
+                              {statusOptions.map((option) => (
+                                <button
+                                  key={option.value}
+                                  onClick={() => handleAppointmentStatusChange(apt.id, option.value)}
+                                  className={`w-full px-3 py-2 text-left text-sm hover:bg-gray-50 flex items-center gap-2 ${apt.status === option.value ? 'bg-gray-100' : ''}`}
+                                >
+                                  <span className={`w-2 h-2 rounded-full ${option.color.split(' ')[0]}`}></span>
+                                  {option.label}
+                                  {apt.status === option.value && (
+                                    <CheckCircle className="w-3 h-3 ml-auto text-green-600" />
+                                  )}
+                                </button>
+                              ))}
+                            </div>
+                          )}
+                        </div>
                       </div>
                     ))}
                   </div>
