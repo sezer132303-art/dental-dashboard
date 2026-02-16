@@ -1,0 +1,853 @@
+{
+  "name": "Multi-Channel Booking",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "whatsapp-booking",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "whatsapp-webhook",
+      "name": "WhatsApp Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [200, 100],
+      "webhookId": "whatsapp-booking-webhook"
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "messenger-booking",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "messenger-webhook",
+      "name": "Messenger Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [200, 300],
+      "webhookId": "messenger-booking-webhook"
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "instagram-booking",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "instagram-webhook",
+      "name": "Instagram Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [200, 500],
+      "webhookId": "instagram-booking-webhook"
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "viber-booking",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "viber-webhook",
+      "name": "Viber Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [200, 700],
+      "webhookId": "viber-booking-webhook"
+    },
+    {
+      "parameters": {
+        "mode": "chooseBranch",
+        "output": "single"
+      },
+      "id": "merge-webhooks",
+      "name": "Merge Webhooks",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3,
+      "position": [420, 400]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Channel Router - Detect which channel the message came from\nconst body = $input.first().json.body || $input.first().json;\n\n// Detect channel based on payload structure\nlet channel = 'unknown';\nlet normalizedData = null;\n\n// WhatsApp (Evolution API)\nif (body?.data?.key?.remoteJid || body?.data?.messageType === 'conversation') {\n  channel = 'whatsapp';\n  const data = body.data || {};\n  const key = data.key || {};\n  const remoteJid = key.remoteJid || '';\n  const phone = remoteJid.replace('@s.whatsapp.net', '');\n  \n  normalizedData = {\n    channel: 'whatsapp',\n    senderId: phone,\n    senderName: data.pushName || '',\n    message: data.message?.conversation || data.message?.extendedTextMessage?.text || '',\n    messageId: key.id || '',\n    timestamp: new Date(data.messageTimestamp * 1000).toISOString(),\n    rawPayload: body\n  };\n}\n\n// Meta (Messenger/Instagram)\nelse if (body?.object === 'page' || body?.object === 'instagram') {\n  channel = body.object === 'instagram' ? 'instagram' : 'messenger';\n  const entry = body.entry?.[0] || {};\n  const messaging = entry.messaging?.[0] || {};\n  \n  normalizedData = {\n    channel,\n    senderId: messaging.sender?.id || '',\n    senderName: '',\n    message: messaging.message?.text || messaging.postback?.payload || '',\n    messageId: messaging.message?.mid || '',\n    timestamp: new Date(messaging.timestamp).toISOString(),\n    pageId: entry.id,\n    rawPayload: body\n  };\n}\n\n// Viber\nelse if (body?.event === 'message' || body?.sender?.id) {\n  channel = 'viber';\n  \n  normalizedData = {\n    channel: 'viber',\n    senderId: body.sender?.id || '',\n    senderName: body.sender?.name || '',\n    message: body.message?.text || '',\n    messageId: body.message_token?.toString() || '',\n    timestamp: new Date(body.timestamp).toISOString(),\n    rawPayload: body\n  };\n}\n\n// Fallback - try to detect from headers or pass through\nelse {\n  normalizedData = {\n    channel: 'unknown',\n    senderId: '',\n    senderName: '',\n    message: JSON.stringify(body),\n    messageId: '',\n    timestamp: new Date().toISOString(),\n    rawPayload: body\n  };\n}\n\nreturn [{ json: normalizedData }];"
+      },
+      "id": "channel-router",
+      "name": "Channel Router",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [640, 400]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "leftValue": "",
+            "caseSensitive": true,
+            "typeValidation": "strict"
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "leftValue": "={{ $json.message }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "isNotEmpty"
+              }
+            }
+          ]
+        }
+      },
+      "id": "has-message",
+      "name": "Has Message?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [860, 400]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://dental-dashboard-nu.vercel.app/api/n8n/log-conversation",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-API-Key",
+              "value": "79d22dce33bd515d33124461ecb3202c27e660944ef29b2cb3cdf3396d37c6e4"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"channel\": \"{{ $json.channel }}\",\n  \"channelUserId\": \"{{ $json.senderId }}\",\n  \"patientPhone\": \"{{ $json.channel === 'whatsapp' || $json.channel === 'viber' ? $json.senderId : '' }}\",\n  \"patientName\": \"{{ $json.senderName }}\",\n  \"direction\": \"inbound\",\n  \"content\": \"{{ $json.message }}\",\n  \"messageType\": \"text\",\n  \"messageId\": \"{{ $json.messageId }}\",\n  \"rawPayload\": {{ JSON.stringify($json.rawPayload) }}\n}",
+        "options": {}
+      },
+      "id": "log-inbound",
+      "name": "Log Inbound Message",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1080, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.openai.com/v1/chat/completions",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer YOUR_OPENAI_API_KEY_HERE"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"model\": \"gpt-4o-mini\",\n  \"messages\": [\n    {\n      \"role\": \"system\",\n      \"content\": \"Ти си асистент на дентална клиника. Анализирай съобщението на пациента и извлечи информация.\\n\\nДнешната дата е {{ $today.format('yyyy-MM-dd') }}.\\n\\nВърни САМО валиден JSON с тази структура:\\n{\\n  \\\"intent\\\": \\\"booking_request\\\" | \\\"availability_inquiry\\\" | \\\"confirmation\\\" | \\\"cancellation\\\" | \\\"general_inquiry\\\",\\n  \\\"preferredDate\\\": \\\"YYYY-MM-DD или null\\\",\\n  \\\"preferredTime\\\": \\\"HH:MM или null\\\",\\n  \\\"procedureType\\\": \\\"тип процедура или null\\\",\\n  \\\"patientName\\\": \\\"име ако е споменато или null\\\"\\n}\\n\\nПримери за дати:\\n- \\\"утре\\\" = {{ $today.plus({days: 1}).format('yyyy-MM-dd') }}\\n- \\\"вдругиден\\\" = {{ $today.plus({days: 2}).format('yyyy-MM-dd') }}\\n- \\\"в понеделник\\\" = изчисли датата\\n- \\\"след седмица\\\" = {{ $today.plus({weeks: 1}).format('yyyy-MM-dd') }}\"\n    },\n    {\n      \"role\": \"user\",\n      \"content\": \"{{ $('Channel Router').item.json.message }}\"\n    }\n  ],\n  \"response_format\": { \"type\": \"json_object\" },\n  \"temperature\": 0.3\n}",
+        "options": {}
+      },
+      "id": "ai-intent-parser",
+      "name": "AI Intent Parser",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1300, 300],
+      "notesInFlow": true,
+      "notes": "NOTE: Replace YOUR_OPENAI_API_KEY_HERE with your actual OpenAI API key"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Parse AI response and prepare for routing\nconst aiResponse = $input.first().json;\nconst content = aiResponse.choices?.[0]?.message?.content || '{}';\nconst parsed = JSON.parse(content);\n\n// Get original message data\nconst channelData = $('Channel Router').first().json;\nconst logData = $('Log Inbound Message').first().json;\n\nreturn [{\n  json: {\n    // Channel info\n    channel: channelData.channel,\n    senderId: channelData.senderId,\n    senderName: channelData.senderName,\n    message: channelData.message,\n    pageId: channelData.pageId,\n    \n    // Conversation tracking\n    conversationId: logData.conversationId,\n    \n    // AI parsed intent\n    intent: parsed.intent || 'general_inquiry',\n    preferredDate: parsed.preferredDate,\n    preferredTime: parsed.preferredTime,\n    procedureType: parsed.procedureType,\n    patientName: parsed.patientName || channelData.senderName\n  }\n}];"
+      },
+      "id": "parse-ai-response",
+      "name": "Parse AI Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1520, 300]
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "leftValue": "",
+                  "caseSensitive": true,
+                  "typeValidation": "strict"
+                },
+                "combinator": "and",
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.intent }}",
+                    "rightValue": "booking_request",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ]
+              },
+              "renameOutput": true,
+              "outputKey": "booking"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "leftValue": "",
+                  "caseSensitive": true,
+                  "typeValidation": "strict"
+                },
+                "combinator": "and",
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.intent }}",
+                    "rightValue": "availability_inquiry",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ]
+              },
+              "renameOutput": true,
+              "outputKey": "availability"
+            }
+          ],
+          "fallbackOutput": {
+            "fallbackOutput": "extra",
+            "outputKey": "other"
+          }
+        },
+        "options": {}
+      },
+      "id": "switch-intent",
+      "name": "Route by Intent",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3,
+      "position": [1740, 300]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "https://dental-dashboard-nu.vercel.app/api/n8n/availability",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-API-Key",
+              "value": "79d22dce33bd515d33124461ecb3202c27e660944ef29b2cb3cdf3396d37c6e4"
+            }
+          ]
+        },
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "date",
+              "value": "={{ $json.preferredDate || $today.plus({days: 1}).format('yyyy-MM-dd') }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "check-availability",
+      "name": "Check Availability",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1960, 200]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "leftValue": "",
+            "caseSensitive": true,
+            "typeValidation": "strict"
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "leftValue": "={{ $json.available }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true"
+              }
+            }
+          ]
+        }
+      },
+      "id": "if-available",
+      "name": "Slots Available?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [2180, 200]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://dental-dashboard-nu.vercel.app/api/n8n/book-appointment",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-API-Key",
+              "value": "79d22dce33bd515d33124461ecb3202c27e660944ef29b2cb3cdf3396d37c6e4"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"doctorId\": \"{{ $json.slots[0].doctorId }}\",\n  \"patientPhone\": \"{{ $('Parse AI Response').first().json.senderId }}\",\n  \"patientName\": \"{{ $('Parse AI Response').first().json.patientName }}\",\n  \"appointmentDate\": \"{{ $json.slots[0].date }}\",\n  \"startTime\": \"{{ $('Parse AI Response').first().json.preferredTime || $json.slots[0].startTime }}\",\n  \"type\": \"{{ $('Parse AI Response').first().json.procedureType || 'Преглед' }}\",\n  \"source\": \"{{ $('Parse AI Response').first().json.channel }}\",\n  \"conversationId\": \"{{ $('Parse AI Response').first().json.conversationId }}\"\n}",
+        "options": {}
+      },
+      "id": "create-booking",
+      "name": "Create Booking",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [2400, 100]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Prepare response message based on booking result\nconst booking = $input.first().json;\nconst channelData = $('Parse AI Response').first().json;\n\nconst confirmationMessage = `✅ Часът е запазен успешно!\n\n📅 Дата: ${booking.appointment?.formattedDate || ''}\n⏰ Час: ${booking.appointment?.startTime || ''}\n👨‍⚕️ Лекар: ${booking.appointment?.doctorName || ''}\n📋 Процедура: ${booking.appointment?.type || ''}\n\nОчакваме те! Ако искаш да промениш часа, отговори на това съобщение.`;\n\nreturn [{\n  json: {\n    channel: channelData.channel,\n    senderId: channelData.senderId,\n    pageId: channelData.pageId,\n    message: confirmationMessage,\n    messageType: 'confirmation'\n  }\n}];"
+      },
+      "id": "prepare-confirmation",
+      "name": "Prepare Confirmation",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2620, 100]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Prepare no slots message\nconst channelData = $('Parse AI Response').first().json;\n\nconst noSlotsMessage = `😔 За съжаление, няма свободни часове за избраната дата.\n\n📅 Свободни дни за следващата седмица:\n• Понеделник - Петък: 09:00 - 18:00\n• Събота: 09:00 - 14:00\n\nМоля, напиши друга дата или се обади на рецепцията.`;\n\nreturn [{\n  json: {\n    channel: channelData.channel,\n    senderId: channelData.senderId,\n    pageId: channelData.pageId,\n    message: noSlotsMessage,\n    messageType: 'no_slots'\n  }\n}];"
+      },
+      "id": "prepare-no-slots",
+      "name": "Prepare No Slots",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2400, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Prepare help message\nconst channelData = $json;\n\nconst helpMessage = `Здравей! 👋\n\nБлагодаря за съобщението. Как мога да ти помогна?\n\n📅 Запази час - напиши \"Искам час за [дата]\" или \"Запази ми час утре в 10\"\n\n❓ Въпроси - свържи се с нас на телефон`;\n\nreturn [{\n  json: {\n    channel: channelData.channel,\n    senderId: channelData.senderId,\n    pageId: channelData.pageId,\n    message: helpMessage,\n    messageType: 'help'\n  }\n}];"
+      },
+      "id": "prepare-help",
+      "name": "Prepare Help Message",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1960, 500]
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "leftValue": "",
+                  "caseSensitive": true,
+                  "typeValidation": "strict"
+                },
+                "combinator": "and",
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.channel }}",
+                    "rightValue": "whatsapp",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ]
+              },
+              "renameOutput": true,
+              "outputKey": "whatsapp"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "leftValue": "",
+                  "caseSensitive": true,
+                  "typeValidation": "strict"
+                },
+                "combinator": "or",
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.channel }}",
+                    "rightValue": "messenger",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  },
+                  {
+                    "leftValue": "={{ $json.channel }}",
+                    "rightValue": "instagram",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ]
+              },
+              "renameOutput": true,
+              "outputKey": "meta"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "leftValue": "",
+                  "caseSensitive": true,
+                  "typeValidation": "strict"
+                },
+                "combinator": "and",
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.channel }}",
+                    "rightValue": "viber",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ]
+              },
+              "renameOutput": true,
+              "outputKey": "viber"
+            }
+          ],
+          "fallbackOutput": {
+            "fallbackOutput": "extra",
+            "outputKey": "unknown"
+          }
+        },
+        "options": {}
+      },
+      "id": "channel-dispatcher",
+      "name": "Channel Dispatcher",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3,
+      "position": [2840, 300]
+    },
+    {
+      "parameters": {
+        "resource": "message",
+        "operation": "sendText",
+        "instanceName": "settbg",
+        "remoteJid": "={{ $json.senderId }}@s.whatsapp.net",
+        "message": "={{ $json.message }}",
+        "options": {}
+      },
+      "id": "send-whatsapp",
+      "name": "Send WhatsApp",
+      "type": "n8n-nodes-evolution-api-english.evolutionApi",
+      "typeVersion": 1,
+      "position": [3060, 100],
+      "credentials": {
+        "evolutionApi": {
+          "id": "XQSyFEVuFnjkHYYS",
+          "name": "Evolution account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://graph.facebook.com/v18.0/me/messages",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer YOUR_META_PAGE_ACCESS_TOKEN_HERE"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"recipient\": {\n    \"id\": \"{{ $json.senderId }}\"\n  },\n  \"messaging_type\": \"RESPONSE\",\n  \"message\": {\n    \"text\": \"{{ $json.message }}\"\n  }\n}",
+        "options": {}
+      },
+      "id": "send-meta",
+      "name": "Send Meta (FB/IG)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [3060, 300],
+      "notesInFlow": true,
+      "notes": "NOTE: Replace YOUR_META_PAGE_ACCESS_TOKEN_HERE with your Page Access Token"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://chatapi.viber.com/pa/send_message",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-Viber-Auth-Token",
+              "value": "YOUR_VIBER_BOT_TOKEN_HERE"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"receiver\": \"{{ $json.senderId }}\",\n  \"type\": \"text\",\n  \"text\": \"{{ $json.message }}\",\n  \"sender\": {\n    \"name\": \"Dental Dashboard\"\n  }\n}",
+        "options": {}
+      },
+      "id": "send-viber",
+      "name": "Send Viber",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [3060, 500],
+      "notesInFlow": true,
+      "notes": "NOTE: Replace YOUR_VIBER_BOT_TOKEN_HERE with your Viber Bot Token"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\"success\": true, \"processed\": true}",
+        "options": {}
+      },
+      "id": "response-success",
+      "name": "Response Success",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [3280, 300]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\"success\": true, \"skipped\": \"no_message\"}",
+        "options": {}
+      },
+      "id": "response-skip",
+      "name": "Response Skip",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [1080, 500]
+    }
+  ],
+  "connections": {
+    "WhatsApp Webhook": {
+      "main": [
+        [
+          {
+            "node": "Merge Webhooks",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Messenger Webhook": {
+      "main": [
+        [
+          {
+            "node": "Merge Webhooks",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Instagram Webhook": {
+      "main": [
+        [
+          {
+            "node": "Merge Webhooks",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Viber Webhook": {
+      "main": [
+        [
+          {
+            "node": "Merge Webhooks",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge Webhooks": {
+      "main": [
+        [
+          {
+            "node": "Channel Router",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Channel Router": {
+      "main": [
+        [
+          {
+            "node": "Has Message?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has Message?": {
+      "main": [
+        [
+          {
+            "node": "Log Inbound Message",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Response Skip",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log Inbound Message": {
+      "main": [
+        [
+          {
+            "node": "AI Intent Parser",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Intent Parser": {
+      "main": [
+        [
+          {
+            "node": "Parse AI Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse AI Response": {
+      "main": [
+        [
+          {
+            "node": "Route by Intent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Route by Intent": {
+      "main": [
+        [
+          {
+            "node": "Check Availability",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Check Availability",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Prepare Help Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Availability": {
+      "main": [
+        [
+          {
+            "node": "Slots Available?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Slots Available?": {
+      "main": [
+        [
+          {
+            "node": "Create Booking",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Prepare No Slots",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Booking": {
+      "main": [
+        [
+          {
+            "node": "Prepare Confirmation",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Confirmation": {
+      "main": [
+        [
+          {
+            "node": "Channel Dispatcher",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare No Slots": {
+      "main": [
+        [
+          {
+            "node": "Channel Dispatcher",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Help Message": {
+      "main": [
+        [
+          {
+            "node": "Channel Dispatcher",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Channel Dispatcher": {
+      "main": [
+        [
+          {
+            "node": "Send WhatsApp",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Send Meta (FB/IG)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Send Viber",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Response Success",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send WhatsApp": {
+      "main": [
+        [
+          {
+            "node": "Response Success",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Meta (FB/IG)": {
+      "main": [
+        [
+          {
+            "node": "Response Success",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Viber": {
+      "main": [
+        [
+          {
+            "node": "Response Success",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "Europe/Sofia"
+  },
+  "staticData": null,
+  "tags": [
+    {
+      "name": "multi-channel",
+      "id": "3"
+    },
+    {
+      "name": "booking",
+      "id": "2"
+    }
+  ],
+  "triggerCount": 4,
+  "meta": {
+    "templateId": "dental-multi-channel-booking",
+    "instanceId": "dental-dashboard"
+  }
+}

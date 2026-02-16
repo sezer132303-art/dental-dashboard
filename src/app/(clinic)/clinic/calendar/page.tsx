@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState, useRef, useCallback } from 'react'
-import { ChevronLeft, ChevronRight, Loader2, CalendarDays, RefreshCw } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Loader2, CalendarDays, RefreshCw, X, Phone, Clock, User, FileText } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 interface Doctor {
@@ -18,6 +18,7 @@ interface Appointment {
   end_time: string
   status: string
   type: string | null
+  notes: string | null
   doctor: {
     id: string
     name: string
@@ -38,6 +39,22 @@ const statusColors: Record<string, string> = {
   cancelled: 'bg-gray-400'
 }
 
+const statusLabels: Record<string, string> = {
+  scheduled: 'Насрочен',
+  confirmed: 'Потвърден',
+  completed: 'Завършен',
+  no_show: 'Неявяване',
+  cancelled: 'Отменен'
+}
+
+const statusOptions = [
+  { value: 'scheduled', label: 'Насрочен', color: 'bg-blue-100 text-blue-700' },
+  { value: 'confirmed', label: 'Потвърден', color: 'bg-indigo-100 text-indigo-700' },
+  { value: 'completed', label: 'Завършен', color: 'bg-green-100 text-green-700' },
+  { value: 'no_show', label: 'Неявяване', color: 'bg-red-100 text-red-700' },
+  { value: 'cancelled', label: 'Отменен', color: 'bg-gray-100 text-gray-700' }
+]
+
 const HOURS = Array.from({ length: 11 }, (_, i) => i + 8) // 8:00 - 18:00
 
 export default function ClinicCalendarPage() {
@@ -56,6 +73,11 @@ export default function ClinicCalendarPage() {
     const diff = now.getDate() - day + (day === 0 ? -6 : 1) // Monday
     return new Date(now.setDate(diff))
   })
+
+  // Appointment detail modal
+  const [selectedAppointment, setSelectedAppointment] = useState<Appointment | null>(null)
+  const [showDetailModal, setShowDetailModal] = useState(false)
+  const [updatingStatus, setUpdatingStatus] = useState(false)
 
   // Close date picker when clicking outside
   useEffect(() => {
@@ -89,6 +111,15 @@ export default function ClinicCalendarPage() {
 
   const formatDate = (date: Date) => {
     return date.toISOString().split('T')[0]
+  }
+
+  const formatDisplayDate = (dateStr: string) => {
+    return new Date(dateStr).toLocaleDateString('bg-BG', {
+      weekday: 'long',
+      day: 'numeric',
+      month: 'long',
+      year: 'numeric'
+    })
   }
 
   const addDays = (date: Date, days: number) => {
@@ -157,6 +188,44 @@ export default function ClinicCalendarPage() {
   // Manual refresh
   const handleRefresh = () => {
     fetchAppointments()
+  }
+
+  // Handle appointment click
+  const handleAppointmentClick = (apt: Appointment) => {
+    setSelectedAppointment(apt)
+    setShowDetailModal(true)
+  }
+
+  // Update appointment status
+  const handleStatusChange = async (newStatus: string) => {
+    if (!selectedAppointment) return
+    setUpdatingStatus(true)
+
+    try {
+      const response = await fetch(`/api/clinic/appointments/${selectedAppointment.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: newStatus })
+      })
+
+      if (response.ok) {
+        // Update local state
+        setAppointments(appointments.map(apt =>
+          apt.id === selectedAppointment.id
+            ? { ...apt, status: newStatus }
+            : apt
+        ))
+        setSelectedAppointment({ ...selectedAppointment, status: newStatus })
+      } else {
+        const data = await response.json()
+        alert(data.error || 'Грешка при промяна на статуса')
+      }
+    } catch (error) {
+      console.error('Status update error:', error)
+      alert('Грешка при промяна на статуса')
+    } finally {
+      setUpdatingStatus(false)
+    }
   }
 
   const getWeekDays = () => {
@@ -493,8 +562,9 @@ export default function ClinicCalendarPage() {
                         return (
                           <div
                             key={apt.id}
+                            onClick={() => handleAppointmentClick(apt)}
                             className={cn(
-                              'absolute left-1 right-1 rounded-md px-2 py-1 text-white text-xs overflow-hidden pointer-events-auto cursor-pointer hover:opacity-90 transition',
+                              'absolute left-1 right-1 rounded-md px-2 py-1 text-white text-xs overflow-hidden pointer-events-auto cursor-pointer hover:opacity-90 transition hover:shadow-md',
                               statusColors[apt.status] || doctorColor
                             )}
                             style={{ top: `${top}px`, height: `${Math.max(height, 20)}px` }}
@@ -572,6 +642,118 @@ export default function ClinicCalendarPage() {
           )
         })}
       </div>
+
+      {/* Appointment Detail Modal */}
+      {showDetailModal && selectedAppointment && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl w-full max-w-md overflow-hidden">
+            {/* Modal Header */}
+            <div className={cn(
+              'p-6 text-white',
+              statusColors[selectedAppointment.status] || 'bg-blue-500'
+            )}>
+              <div className="flex items-start justify-between">
+                <div>
+                  <h2 className="text-xl font-semibold">
+                    {selectedAppointment.patient?.name || 'Пациент'}
+                  </h2>
+                  <p className="text-white/80 mt-1">
+                    {selectedAppointment.type || 'Час'}
+                  </p>
+                </div>
+                <button
+                  onClick={() => setShowDetailModal(false)}
+                  className="p-1 hover:bg-white/20 rounded-lg transition"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+            </div>
+
+            {/* Modal Body */}
+            <div className="p-6 space-y-4">
+              {/* Date and Time */}
+              <div className="flex items-center gap-3 text-gray-600">
+                <CalendarDays className="w-5 h-5" />
+                <div>
+                  <p className="font-medium text-gray-900">
+                    {formatDisplayDate(selectedAppointment.appointment_date)}
+                  </p>
+                  <p className="text-sm">
+                    {selectedAppointment.start_time.slice(0, 5)} - {selectedAppointment.end_time.slice(0, 5)}
+                  </p>
+                </div>
+              </div>
+
+              {/* Patient Phone */}
+              {selectedAppointment.patient?.phone && (
+                <div className="flex items-center gap-3 text-gray-600">
+                  <Phone className="w-5 h-5" />
+                  <a
+                    href={`tel:${selectedAppointment.patient.phone}`}
+                    className="text-blue-600 hover:underline"
+                  >
+                    {selectedAppointment.patient.phone}
+                  </a>
+                </div>
+              )}
+
+              {/* Doctor */}
+              {selectedAppointment.doctor && (
+                <div className="flex items-center gap-3 text-gray-600">
+                  <User className="w-5 h-5" />
+                  <span>{selectedAppointment.doctor.name}</span>
+                </div>
+              )}
+
+              {/* Notes */}
+              {selectedAppointment.notes && (
+                <div className="flex items-start gap-3 text-gray-600">
+                  <FileText className="w-5 h-5 mt-0.5" />
+                  <span>{selectedAppointment.notes}</span>
+                </div>
+              )}
+
+              {/* Status Change */}
+              <div className="pt-4 border-t">
+                <p className="text-sm font-medium text-gray-700 mb-3">Промяна на статус</p>
+                <div className="grid grid-cols-2 gap-2">
+                  {statusOptions.map((option) => (
+                    <button
+                      key={option.value}
+                      onClick={() => handleStatusChange(option.value)}
+                      disabled={updatingStatus || selectedAppointment.status === option.value}
+                      className={cn(
+                        'px-3 py-2 rounded-lg text-sm font-medium transition',
+                        selectedAppointment.status === option.value
+                          ? `${option.color} ring-2 ring-offset-2 ring-current`
+                          : 'bg-gray-100 text-gray-700 hover:bg-gray-200',
+                        updatingStatus && 'opacity-50 cursor-not-allowed'
+                      )}
+                    >
+                      {updatingStatus && selectedAppointment.status !== option.value ? (
+                        <Loader2 className="w-4 h-4 animate-spin mx-auto" />
+                      ) : (
+                        option.label
+                      )}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* Modal Footer */}
+            <div className="px-6 pb-6">
+              <button
+                onClick={() => setShowDetailModal(false)}
+                className="w-full px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition font-medium"
+              >
+                Затвори
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

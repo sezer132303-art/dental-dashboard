@@ -1,13 +1,22 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase'
+import { getAuthorizedClinicId } from '@/lib/session-auth'
 
-// GET /api/patients - List all patients
+// GET /api/patients - List patients (requires authentication)
 export async function GET(request: NextRequest) {
   try {
-    const supabase = createServerSupabaseClient()
     const { searchParams } = new URL(request.url)
-    const clinicId = searchParams.get('clinicId')
+    const requestedClinicId = searchParams.get('clinicId')
     const search = searchParams.get('search')
+
+    // Get authorized clinic(s) based on user session
+    const { clinicId, isAdmin, error: authError } = await getAuthorizedClinicId(requestedClinicId)
+
+    if (authError) {
+      return NextResponse.json({ error: authError }, { status: 401 })
+    }
+
+    const supabase = createServerSupabaseClient()
 
     let query = supabase
       .from('patients')
@@ -15,8 +24,13 @@ export async function GET(request: NextRequest) {
       .eq('is_active', true)
       .order('name')
 
+    // Non-admin users MUST have a clinic_id filter
+    // Admin users can optionally filter by clinic
     if (clinicId) {
       query = query.eq('clinic_id', clinicId)
+    } else if (!isAdmin) {
+      // This shouldn't happen due to getAuthorizedClinicId, but safety check
+      return NextResponse.json({ error: 'Clinic access required' }, { status: 403 })
     }
 
     if (search) {
@@ -37,17 +51,32 @@ export async function GET(request: NextRequest) {
   }
 }
 
-// POST /api/patients - Create a new patient
+// POST /api/patients - Create a new patient (requires authentication)
 export async function POST(request: NextRequest) {
   try {
-    const supabase = createServerSupabaseClient()
     const body = await request.json()
+    const { name, phone, email, date_of_birth, gender, notes, clinic_id: requestedClinicId } = body
 
-    const { name, phone, email, date_of_birth, gender, notes, clinic_id } = body
+    // Verify user is authorized and get their clinic
+    const { clinicId, isAdmin, error: authError } = await getAuthorizedClinicId(requestedClinicId)
 
-    if (!name || !phone || !clinic_id) {
+    if (authError) {
+      return NextResponse.json({ error: authError }, { status: 401 })
+    }
+
+    // Determine which clinic to create the patient in
+    const effectiveClinicId = isAdmin ? (requestedClinicId || clinicId) : clinicId
+
+    if (!effectiveClinicId) {
       return NextResponse.json(
-        { error: 'Име, телефон и клиника са задължителни' },
+        { error: 'Clinic ID is required' },
+        { status: 400 }
+      )
+    }
+
+    if (!name || !phone) {
+      return NextResponse.json(
+        { error: 'Име и телефон са задължителни' },
         { status: 400 }
       )
     }
@@ -60,6 +89,8 @@ export async function POST(request: NextRequest) {
       normalizedPhone = '359' + normalizedPhone
     }
 
+    const supabase = createServerSupabaseClient()
+
     const { data: patient, error } = await supabase
       .from('patients')
       .insert({
@@ -69,7 +100,7 @@ export async function POST(request: NextRequest) {
         date_of_birth,
         gender,
         notes,
-        clinic_id
+        clinic_id: effectiveClinicId
       })
       .select()
       .single()

@@ -17,8 +17,47 @@ import {
   Key,
   Link,
   Users,
-  CalendarDays
+  CalendarDays,
+  CheckCircle,
+  XCircle,
+  AlertCircle
 } from 'lucide-react'
+import ChannelBadge from '@/components/ChannelBadge'
+
+type MessagingChannel = 'whatsapp' | 'messenger' | 'instagram' | 'viber'
+
+interface ChannelConfig {
+  channel: MessagingChannel
+  configured: boolean
+  is_active: boolean
+  webhook_url: string | null
+  last_verified_at: string | null
+}
+
+function ChannelStatusBadge({ status }: { status: 'active' | 'configured' | 'not_configured' }) {
+  if (status === 'active') {
+    return (
+      <span className="flex items-center gap-1 text-xs bg-green-100 text-green-700 px-2 py-1 rounded-full">
+        <CheckCircle className="w-3 h-3" />
+        Активен
+      </span>
+    )
+  }
+  if (status === 'configured') {
+    return (
+      <span className="flex items-center gap-1 text-xs bg-yellow-100 text-yellow-700 px-2 py-1 rounded-full">
+        <AlertCircle className="w-3 h-3" />
+        Конфигуриран
+      </span>
+    )
+  }
+  return (
+    <span className="flex items-center gap-1 text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded-full">
+      <XCircle className="w-3 h-3" />
+      Не е настроен
+    </span>
+  )
+}
 
 interface Doctor {
   id: string
@@ -51,8 +90,10 @@ interface ClinicProfile {
 
 export default function ClinicSettingsPage() {
   const [profile, setProfile] = useState<ClinicProfile | null>(null)
+  const [channels, setChannels] = useState<ChannelConfig[]>([])
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+  const [savingChannel, setSavingChannel] = useState<string | null>(null)
   const [saved, setSaved] = useState(false)
   const [error, setError] = useState('')
 
@@ -67,6 +108,24 @@ export default function ClinicSettingsPage() {
     google_calendar_id: ''
   })
 
+  // Channel credentials forms
+  const [messengerCreds, setMessengerCreds] = useState({
+    page_id: '',
+    page_access_token: '',
+    verify_token: ''
+  })
+
+  const [instagramCreds, setInstagramCreds] = useState({
+    page_id: '',
+    page_access_token: '',
+    verify_token: ''
+  })
+
+  const [viberCreds, setViberCreds] = useState({
+    bot_token: '',
+    bot_name: ''
+  })
+
   // Notification settings (local only for now)
   const [notifications, setNotifications] = useState({
     reminder24h: true,
@@ -75,6 +134,7 @@ export default function ClinicSettingsPage() {
 
   useEffect(() => {
     fetchProfile()
+    fetchChannels()
   }, [])
 
   async function fetchProfile() {
@@ -100,6 +160,70 @@ export default function ClinicSettingsPage() {
     } finally {
       setLoading(false)
     }
+  }
+
+  async function fetchChannels() {
+    try {
+      const response = await fetch('/api/clinic/channels')
+      if (response.ok) {
+        const data = await response.json()
+        setChannels(data.channels || [])
+      }
+    } catch (err) {
+      console.error('Error fetching channels:', err)
+    }
+  }
+
+  async function saveChannel(channel: MessagingChannel) {
+    setSavingChannel(channel)
+    setError('')
+
+    let credentials = {}
+    switch (channel) {
+      case 'messenger':
+        credentials = messengerCreds
+        break
+      case 'instagram':
+        credentials = instagramCreds
+        break
+      case 'viber':
+        credentials = viberCreds
+        break
+      default:
+        return
+    }
+
+    try {
+      const response = await fetch('/api/clinic/channels', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          channel,
+          credentials,
+          is_active: true
+        })
+      })
+
+      if (!response.ok) {
+        const data = await response.json()
+        throw new Error(data.error || 'Failed to save channel')
+      }
+
+      await fetchChannels()
+      setSaved(true)
+      setTimeout(() => setSaved(false), 2000)
+    } catch (err: any) {
+      console.error('Save channel error:', err)
+      setError(err.message || 'Грешка при запазване')
+    } finally {
+      setSavingChannel(null)
+    }
+  }
+
+  function getChannelStatus(channel: MessagingChannel): 'active' | 'configured' | 'not_configured' {
+    const config = channels.find(c => c.channel === channel)
+    if (!config || !config.configured) return 'not_configured'
+    return config.is_active ? 'active' : 'configured'
   }
 
   async function handleSave() {
@@ -294,6 +418,171 @@ export default function ClinicSettingsPage() {
               className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent text-gray-900"
             />
           </div>
+        </div>
+      </div>
+
+      {/* Messenger Settings */}
+      <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="font-semibold text-gray-900 flex items-center gap-2">
+            <ChannelBadge channel="messenger" size="md" />
+            настройки
+          </h3>
+          <ChannelStatusBadge status={getChannelStatus('messenger')} />
+        </div>
+        <div className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Page ID
+            </label>
+            <input
+              type="text"
+              value={messengerCreds.page_id}
+              onChange={(e) => setMessengerCreds({ ...messengerCreds, page_id: e.target.value })}
+              placeholder="123456789012345"
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent text-gray-900"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              <Key className="w-4 h-4 inline mr-1" />
+              Page Access Token
+            </label>
+            <input
+              type="password"
+              value={messengerCreds.page_access_token}
+              onChange={(e) => setMessengerCreds({ ...messengerCreds, page_access_token: e.target.value })}
+              placeholder="EAA..."
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent text-gray-900"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Verify Token
+            </label>
+            <input
+              type="text"
+              value={messengerCreds.verify_token}
+              onChange={(e) => setMessengerCreds({ ...messengerCreds, verify_token: e.target.value })}
+              placeholder="dental-verify-2026"
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent text-gray-900"
+            />
+          </div>
+          <button
+            onClick={() => saveChannel('messenger')}
+            disabled={savingChannel === 'messenger'}
+            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 flex items-center gap-2"
+          >
+            {savingChannel === 'messenger' ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : (
+              <Save className="w-4 h-4" />
+            )}
+            Запази Messenger
+          </button>
+        </div>
+      </div>
+
+      {/* Instagram Settings */}
+      <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="font-semibold text-gray-900 flex items-center gap-2">
+            <ChannelBadge channel="instagram" size="md" />
+            настройки
+          </h3>
+          <ChannelStatusBadge status={getChannelStatus('instagram')} />
+        </div>
+        <p className="text-sm text-gray-500 mb-4">
+          Instagram използва същата Meta Graph API като Messenger. Свържете Instagram Business Account към вашата Facebook страница.
+        </p>
+        <div className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Page ID (същият като Messenger)
+            </label>
+            <input
+              type="text"
+              value={instagramCreds.page_id}
+              onChange={(e) => setInstagramCreds({ ...instagramCreds, page_id: e.target.value })}
+              placeholder="123456789012345"
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent text-gray-900"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              <Key className="w-4 h-4 inline mr-1" />
+              Page Access Token
+            </label>
+            <input
+              type="password"
+              value={instagramCreds.page_access_token}
+              onChange={(e) => setInstagramCreds({ ...instagramCreds, page_access_token: e.target.value })}
+              placeholder="EAA..."
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent text-gray-900"
+            />
+          </div>
+          <button
+            onClick={() => saveChannel('instagram')}
+            disabled={savingChannel === 'instagram'}
+            className="px-4 py-2 bg-pink-600 text-white rounded-lg hover:bg-pink-700 disabled:opacity-50 flex items-center gap-2"
+          >
+            {savingChannel === 'instagram' ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : (
+              <Save className="w-4 h-4" />
+            )}
+            Запази Instagram
+          </button>
+        </div>
+      </div>
+
+      {/* Viber Settings */}
+      <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="font-semibold text-gray-900 flex items-center gap-2">
+            <ChannelBadge channel="viber" size="md" />
+            настройки
+          </h3>
+          <ChannelStatusBadge status={getChannelStatus('viber')} />
+        </div>
+        <div className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Bot Name
+            </label>
+            <input
+              type="text"
+              value={viberCreds.bot_name}
+              onChange={(e) => setViberCreds({ ...viberCreds, bot_name: e.target.value })}
+              placeholder="Dental Clinic"
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent text-gray-900"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              <Key className="w-4 h-4 inline mr-1" />
+              Bot Token
+            </label>
+            <input
+              type="password"
+              value={viberCreds.bot_token}
+              onChange={(e) => setViberCreds({ ...viberCreds, bot_token: e.target.value })}
+              placeholder="Viber Bot API Token"
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent text-gray-900"
+            />
+          </div>
+          <button
+            onClick={() => saveChannel('viber')}
+            disabled={savingChannel === 'viber'}
+            className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 flex items-center gap-2"
+          >
+            {savingChannel === 'viber' ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : (
+              <Save className="w-4 h-4" />
+            )}
+            Запази Viber
+          </button>
         </div>
       </div>
 

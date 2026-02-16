@@ -126,8 +126,8 @@ export default function ClinicDashboardPage() {
           attendanceRate: metricsData.attendanceRate || 0,
           attendanceChange: 0,
           totalPatients: metricsData.totalPatients || 0,
-          appointmentsThisWeek: metricsData.totalAppointments || 0,
-          appointmentsToday: metricsData.pendingAppointments || 0,
+          appointmentsThisWeek: metricsData.appointmentsThisWeek || 0,
+          appointmentsToday: metricsData.appointmentsToday || 0,
           noShows: metricsData.noShows || 0,
           doctors: (doctorsData.doctors || []).map((d: any) => {
             const stats = doctorStatsMap.get(d.id)

@@ -11,9 +11,13 @@ import {
   ArrowRight,
   RefreshCw,
   Loader2,
-  X
+  X,
+  Filter
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import ChannelBadge from '@/components/ChannelBadge'
+
+type MessagingChannel = 'whatsapp' | 'messenger' | 'instagram' | 'viber'
 
 interface Message {
   id: string
@@ -25,19 +29,30 @@ interface Message {
 
 interface Conversation {
   id: string
-  patient_phone: string
+  channel: MessagingChannel
+  channel_user_id: string
+  patient_phone: string | null
   patient_id: string | null
   status: 'active' | 'resolved' | 'booking_complete'
   started_at: string
   updated_at: string
   patient: {
-    id: string
+    id: string | null
     name: string
     phone: string
   } | null
   messagesCount: number
   lastMessage: Message | null
   recentMessages: Message[]
+}
+
+interface ChannelStats {
+  channel: MessagingChannel
+  total_conversations: number
+  active_conversations: number
+  completed_bookings: number
+  conversations_this_week: number
+  conversations_today: number
 }
 
 const statusColors: Record<string, string> = {
@@ -70,27 +85,35 @@ const intentColors: Record<string, string> = {
 
 export default function ConversationsPage() {
   const [conversations, setConversations] = useState<Conversation[]>([])
+  const [channelStats, setChannelStats] = useState<ChannelStats[]>([])
   const [loading, setLoading] = useState(true)
   const [selectedConversation, setSelectedConversation] = useState<Conversation | null>(null)
-  const [filter, setFilter] = useState<string>('all')
+  const [statusFilter, setStatusFilter] = useState<string>('all')
+  const [channelFilter, setChannelFilter] = useState<string>('all')
 
   useEffect(() => {
     fetchConversations()
     // Auto-refresh every 30 seconds
     const interval = setInterval(fetchConversations, 30000)
     return () => clearInterval(interval)
-  }, [filter])
+  }, [statusFilter, channelFilter])
 
   async function fetchConversations() {
     try {
       const params = new URLSearchParams()
-      if (filter !== 'all') {
-        params.append('status', filter)
+      if (statusFilter !== 'all') {
+        params.append('status', statusFilter)
+      }
+      if (channelFilter !== 'all') {
+        params.append('channel', channelFilter)
       }
       const response = await fetch(`/api/conversations?${params}`)
       const data = await response.json()
       if (data.conversations) {
         setConversations(data.conversations)
+      }
+      if (data.channelStats) {
+        setChannelStats(data.channelStats)
       }
     } catch (error) {
       console.error('Error fetching conversations:', error)
@@ -149,13 +172,19 @@ export default function ConversationsPage() {
     )
   }
 
+  // Count conversations by channel
+  const channelCounts = conversations.reduce((acc, c) => {
+    acc[c.channel] = (acc[c.channel] || 0) + 1
+    return acc
+  }, {} as Record<string, number>)
+
   return (
     <div className="space-y-6">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">WhatsApp разговори</h1>
-          <p className="text-gray-600">Следене на съобщения и резервации</p>
+          <h1 className="text-2xl font-bold text-gray-900">Разговори</h1>
+          <p className="text-gray-600">Следене на съобщения от всички канали</p>
         </div>
         <button
           onClick={() => fetchConversations()}
@@ -216,22 +245,62 @@ export default function ConversationsPage() {
         </div>
       </div>
 
-      {/* Filter */}
-      <div className="flex gap-2">
-        {['all', 'active', 'booking_complete', 'resolved'].map((f) => (
-          <button
-            key={f}
-            onClick={() => setFilter(f)}
-            className={cn(
-              'px-4 py-2 rounded-lg text-sm font-medium transition',
-              filter === f
-                ? 'bg-blue-600 text-white'
-                : 'bg-white text-gray-700 border border-gray-200 hover:bg-gray-50'
-            )}
-          >
-            {f === 'all' ? 'Всички' : statusLabels[f]}
-          </button>
-        ))}
+      {/* Filters */}
+      <div className="flex flex-wrap gap-4">
+        {/* Channel Filter */}
+        <div className="flex items-center gap-2">
+          <Filter className="w-4 h-4 text-gray-500" />
+          <span className="text-sm text-gray-600">Канал:</span>
+          <div className="flex gap-1">
+            <button
+              onClick={() => setChannelFilter('all')}
+              className={cn(
+                'px-3 py-1.5 rounded-lg text-sm font-medium transition',
+                channelFilter === 'all'
+                  ? 'bg-gray-800 text-white'
+                  : 'bg-white text-gray-700 border border-gray-200 hover:bg-gray-50'
+              )}
+            >
+              Всички
+            </button>
+            {(['whatsapp', 'messenger', 'instagram', 'viber'] as MessagingChannel[]).map((ch) => (
+              <button
+                key={ch}
+                onClick={() => setChannelFilter(ch)}
+                className={cn(
+                  'px-3 py-1.5 rounded-lg text-sm font-medium transition flex items-center gap-1.5',
+                  channelFilter === ch
+                    ? 'bg-gray-800 text-white'
+                    : 'bg-white text-gray-700 border border-gray-200 hover:bg-gray-50'
+                )}
+              >
+                <ChannelBadge channel={ch} size="sm" showLabel={false} className="bg-transparent p-0" />
+                <span className="hidden sm:inline">{channelCounts[ch] || 0}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Status Filter */}
+        <div className="flex items-center gap-2">
+          <span className="text-sm text-gray-600">Статус:</span>
+          <div className="flex gap-1">
+            {['all', 'active', 'booking_complete', 'resolved'].map((f) => (
+              <button
+                key={f}
+                onClick={() => setStatusFilter(f)}
+                className={cn(
+                  'px-3 py-1.5 rounded-lg text-sm font-medium transition',
+                  statusFilter === f
+                    ? 'bg-blue-600 text-white'
+                    : 'bg-white text-gray-700 border border-gray-200 hover:bg-gray-50'
+                )}
+              >
+                {f === 'all' ? 'Всички' : statusLabels[f]}
+              </button>
+            ))}
+          </div>
+        </div>
       </div>
 
       {/* Conversations List */}
@@ -250,8 +319,13 @@ export default function ConversationsPage() {
             >
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-4">
-                  <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center">
-                    <MessageCircle className="w-6 h-6 text-green-600" />
+                  <div className="relative">
+                    <div className="w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center">
+                      <User className="w-6 h-6 text-gray-500" />
+                    </div>
+                    <div className="absolute -bottom-1 -right-1">
+                      <ChannelBadge channel={conversation.channel} size="sm" showLabel={false} />
+                    </div>
                   </div>
                   <div>
                     <div className="flex items-center gap-2">
@@ -266,8 +340,14 @@ export default function ConversationsPage() {
                       </span>
                     </div>
                     <div className="flex items-center gap-2 text-sm text-gray-600 mt-1">
-                      <Phone className="w-3 h-3" />
-                      {formatPhone(conversation.patient_phone)}
+                      {conversation.patient_phone ? (
+                        <>
+                          <Phone className="w-3 h-3" />
+                          {formatPhone(conversation.patient_phone)}
+                        </>
+                      ) : (
+                        <span className="text-gray-400">{conversation.channel_user_id.substring(0, 15)}...</span>
+                      )}
                     </div>
                     {conversation.lastMessage && (
                       <p className="text-sm text-gray-500 mt-1 truncate max-w-md">
@@ -298,15 +378,25 @@ export default function ConversationsPage() {
             {/* Header */}
             <div className="p-4 border-b flex items-center justify-between">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center">
-                  <User className="w-5 h-5 text-green-600" />
+                <div className="relative">
+                  <div className="w-10 h-10 bg-gray-100 rounded-full flex items-center justify-center">
+                    <User className="w-5 h-5 text-gray-600" />
+                  </div>
+                  <div className="absolute -bottom-1 -right-1">
+                    <ChannelBadge channel={selectedConversation.channel} size="sm" showLabel={false} />
+                  </div>
                 </div>
                 <div>
-                  <h2 className="font-semibold text-gray-900">
-                    {selectedConversation.patient?.name || 'Непознат'}
-                  </h2>
+                  <div className="flex items-center gap-2">
+                    <h2 className="font-semibold text-gray-900">
+                      {selectedConversation.patient?.name || 'Непознат'}
+                    </h2>
+                    <ChannelBadge channel={selectedConversation.channel} size="sm" />
+                  </div>
                   <p className="text-sm text-gray-500">
-                    {formatPhone(selectedConversation.patient_phone)}
+                    {selectedConversation.patient_phone
+                      ? formatPhone(selectedConversation.patient_phone)
+                      : selectedConversation.channel_user_id}
                   </p>
                 </div>
               </div>

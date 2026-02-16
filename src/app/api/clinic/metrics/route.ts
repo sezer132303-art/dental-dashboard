@@ -68,6 +68,18 @@ export async function GET() {
       .eq('clinic_id', clinicId)
       .eq('is_active', true)
 
+    // Filter appointments for this week
+    const thisWeekAppointments = appointments?.filter(a =>
+      a.appointment_date >= startDateStr && a.appointment_date <= endDateStr
+    ) || []
+
+    const appointmentsThisWeek = thisWeekAppointments.length
+    const appointmentsThisWeekNoShow = thisWeekAppointments.filter(a => a.status === 'no_show').length
+
+    // Today's appointments
+    const todayStr = new Date().toISOString().split('T')[0]
+    const appointmentsToday = appointments?.filter(a => a.appointment_date === todayStr).length || 0
+
     // Calculate per-doctor stats for this week
     const doctorStats = doctors?.map(doctor => {
       const doctorAppointments = appointments?.filter(a => a.doctor_id === doctor.id) || []
@@ -114,6 +126,8 @@ export async function GET() {
       totalPatients: totalPatients || 0,
       activeConversations,
       attendanceRate,
+      appointmentsThisWeek,
+      appointmentsToday,
       doctors: doctorStats
     })
   } catch (error) {

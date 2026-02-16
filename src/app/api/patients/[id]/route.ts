@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase'
+import { getAuthorizedClinicId } from '@/lib/session-auth'
 
 // GET /api/patients/[id] - Get single patient with appointments
 export async function GET(
@@ -8,6 +9,14 @@ export async function GET(
 ) {
   try {
     const { id } = await params
+
+    // Check authentication
+    const { clinicId, isAdmin, error: authError } = await getAuthorizedClinicId()
+
+    if (authError) {
+      return NextResponse.json({ error: authError }, { status: 401 })
+    }
+
     const supabase = createServerSupabaseClient()
 
     const { data: patient, error } = await supabase
@@ -31,6 +40,11 @@ export async function GET(
       return NextResponse.json({ error: 'Пациентът не е намерен' }, { status: 404 })
     }
 
+    // Verify clinic access for non-admin users
+    if (!isAdmin && patient.clinic_id !== clinicId) {
+      return NextResponse.json({ error: 'Нямате достъп до този пациент' }, { status: 403 })
+    }
+
     return NextResponse.json({ patient })
   } catch (error) {
     console.error('Get patient error:', error)
@@ -45,9 +59,33 @@ export async function PUT(
 ) {
   try {
     const { id } = await params
-    const supabase = createServerSupabaseClient()
-    const body = await request.json()
 
+    // Check authentication
+    const { clinicId, isAdmin, error: authError } = await getAuthorizedClinicId()
+
+    if (authError) {
+      return NextResponse.json({ error: authError }, { status: 401 })
+    }
+
+    const supabase = createServerSupabaseClient()
+
+    // Verify patient exists and user has access
+    const { data: existingPatient, error: fetchError } = await supabase
+      .from('patients')
+      .select('clinic_id')
+      .eq('id', id)
+      .single()
+
+    if (fetchError || !existingPatient) {
+      return NextResponse.json({ error: 'Пациентът не е намерен' }, { status: 404 })
+    }
+
+    // Verify clinic access for non-admin users
+    if (!isAdmin && existingPatient.clinic_id !== clinicId) {
+      return NextResponse.json({ error: 'Нямате достъп до този пациент' }, { status: 403 })
+    }
+
+    const body = await request.json()
     const { name, phone, email, date_of_birth, gender, notes, is_active } = body
 
     // Normalize phone if provided
@@ -96,7 +134,31 @@ export async function DELETE(
 ) {
   try {
     const { id } = await params
+
+    // Check authentication
+    const { clinicId, isAdmin, error: authError } = await getAuthorizedClinicId()
+
+    if (authError) {
+      return NextResponse.json({ error: authError }, { status: 401 })
+    }
+
     const supabase = createServerSupabaseClient()
+
+    // Verify patient exists and user has access
+    const { data: existingPatient, error: fetchError } = await supabase
+      .from('patients')
+      .select('clinic_id')
+      .eq('id', id)
+      .single()
+
+    if (fetchError || !existingPatient) {
+      return NextResponse.json({ error: 'Пациентът не е намерен' }, { status: 404 })
+    }
+
+    // Verify clinic access for non-admin users
+    if (!isAdmin && existingPatient.clinic_id !== clinicId) {
+      return NextResponse.json({ error: 'Нямате достъп до този пациент' }, { status: 403 })
+    }
 
     const { error } = await supabase
       .from('patients')

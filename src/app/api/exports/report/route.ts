@@ -1,12 +1,25 @@
 import { NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase'
+import { getAuthorizedClinicId } from '@/lib/session-auth'
 
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url)
     const startDate = searchParams.get('startDate') || new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
     const endDate = searchParams.get('endDate') || new Date().toISOString().split('T')[0]
-    const clinicId = searchParams.get('clinicId')
+    const requestedClinicId = searchParams.get('clinicId')
+
+    // Check authentication
+    const { clinicId, isAdmin, error: authError } = await getAuthorizedClinicId(requestedClinicId)
+
+    if (authError) {
+      return NextResponse.json({ error: authError }, { status: 401 })
+    }
+
+    // Non-admin users MUST have a clinic_id
+    if (!isAdmin && !clinicId) {
+      return NextResponse.json({ error: 'No clinic assigned' }, { status: 403 })
+    }
 
     const supabase = createServerSupabaseClient()
 
@@ -17,6 +30,7 @@ export async function GET(request: Request) {
       .gte('appointment_date', startDate)
       .lte('appointment_date', endDate)
 
+    // Always filter by clinic for non-admin users
     if (clinicId) {
       appointmentsQuery = appointmentsQuery.eq('clinic_id', clinicId)
     }

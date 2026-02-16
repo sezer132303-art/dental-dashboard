@@ -1,12 +1,26 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase'
+import { getAuthorizedClinicId } from '@/lib/session-auth'
 
 // GET /api/metrics - Get dashboard metrics
 export async function GET(request: NextRequest) {
   try {
-    const supabase = createServerSupabaseClient()
     const { searchParams } = new URL(request.url)
-    const clinicId = searchParams.get('clinicId')
+    const requestedClinicId = searchParams.get('clinicId')
+
+    // Check authentication
+    const { clinicId, isAdmin, error: authError } = await getAuthorizedClinicId(requestedClinicId)
+
+    if (authError) {
+      return NextResponse.json({ error: authError }, { status: 401 })
+    }
+
+    // Non-admin users MUST have a clinic_id
+    if (!isAdmin && !clinicId) {
+      return NextResponse.json({ error: 'No clinic assigned' }, { status: 403 })
+    }
+
+    const supabase = createServerSupabaseClient()
 
     // Get current date info
     const today = new Date()

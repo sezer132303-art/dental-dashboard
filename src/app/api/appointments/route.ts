@@ -1,19 +1,28 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase'
+import { getAuthorizedClinicId } from '@/lib/session-auth'
 
-// GET /api/appointments - List appointments
+// GET /api/appointments - List appointments (requires authentication)
 export async function GET(request: NextRequest) {
   try {
-    const supabase = createServerSupabaseClient()
     const { searchParams } = new URL(request.url)
 
-    const clinicId = searchParams.get('clinicId')
+    const requestedClinicId = searchParams.get('clinicId')
     const doctorId = searchParams.get('doctorId')
     const patientId = searchParams.get('patientId')
     const date = searchParams.get('date')
     const startDate = searchParams.get('startDate')
     const endDate = searchParams.get('endDate')
     const status = searchParams.get('status')
+
+    // Get authorized clinic(s) based on user session
+    const { clinicId, isAdmin, error: authError } = await getAuthorizedClinicId(requestedClinicId)
+
+    if (authError) {
+      return NextResponse.json({ error: authError }, { status: 401 })
+    }
+
+    const supabase = createServerSupabaseClient()
 
     let query = supabase
       .from('appointments')
@@ -25,8 +34,11 @@ export async function GET(request: NextRequest) {
       .order('appointment_date', { ascending: true })
       .order('start_time', { ascending: true })
 
+    // Non-admin users MUST have a clinic_id filter
     if (clinicId) {
       query = query.eq('clinic_id', clinicId)
+    } else if (!isAdmin) {
+      return NextResponse.json({ error: 'Clinic access required' }, { status: 403 })
     }
 
     if (doctorId) {
@@ -67,14 +79,13 @@ export async function GET(request: NextRequest) {
   }
 }
 
-// POST /api/appointments - Create a new appointment
+// POST /api/appointments - Create a new appointment (requires authentication)
 export async function POST(request: NextRequest) {
   try {
-    const supabase = createServerSupabaseClient()
     const body = await request.json()
 
     const {
-      clinic_id,
+      clinic_id: requestedClinicId,
       doctor_id,
       patient_id,
       appointment_date,
@@ -85,11 +96,46 @@ export async function POST(request: NextRequest) {
       price
     } = body
 
-    if (!clinic_id || !doctor_id || !patient_id || !appointment_date || !start_time || !end_time) {
+    // Verify user is authorized and get their clinic
+    const { clinicId, isAdmin, error: authError } = await getAuthorizedClinicId(requestedClinicId)
+
+    if (authError) {
+      return NextResponse.json({ error: authError }, { status: 401 })
+    }
+
+    const effectiveClinicId = isAdmin ? (requestedClinicId || clinicId) : clinicId
+
+    if (!effectiveClinicId || !doctor_id || !patient_id || !appointment_date || !start_time || !end_time) {
       return NextResponse.json(
         { error: 'Липсват задължителни полета' },
         { status: 400 }
       )
+    }
+
+    const supabase = createServerSupabaseClient()
+
+    // Verify doctor belongs to this clinic
+    const { data: doctor } = await supabase
+      .from('doctors')
+      .select('id')
+      .eq('id', doctor_id)
+      .eq('clinic_id', effectiveClinicId)
+      .single()
+
+    if (!doctor) {
+      return NextResponse.json({ error: 'Doctor not found in this clinic' }, { status: 403 })
+    }
+
+    // Verify patient belongs to this clinic
+    const { data: patient } = await supabase
+      .from('patients')
+      .select('id')
+      .eq('id', patient_id)
+      .eq('clinic_id', effectiveClinicId)
+      .single()
+
+    if (!patient) {
+      return NextResponse.json({ error: 'Patient not found in this clinic' }, { status: 403 })
     }
 
     // Check for conflicts
@@ -111,7 +157,7 @@ export async function POST(request: NextRequest) {
     const { data: appointment, error } = await supabase
       .from('appointments')
       .insert({
-        clinic_id,
+        clinic_id: effectiveClinicId,
         doctor_id,
         patient_id,
         appointment_date,

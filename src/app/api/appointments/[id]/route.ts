@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase'
+import { getAuthorizedClinicId } from '@/lib/session-auth'
 
 // GET /api/appointments/[id] - Get single appointment
 export async function GET(
@@ -8,6 +9,14 @@ export async function GET(
 ) {
   try {
     const { id } = await params
+
+    // Check authentication
+    const { clinicId, isAdmin, error: authError } = await getAuthorizedClinicId()
+
+    if (authError) {
+      return NextResponse.json({ error: authError }, { status: 401 })
+    }
+
     const supabase = createServerSupabaseClient()
 
     const { data: appointment, error } = await supabase
@@ -24,6 +33,11 @@ export async function GET(
       return NextResponse.json({ error: 'Часът не е намерен' }, { status: 404 })
     }
 
+    // Verify clinic access for non-admin users
+    if (!isAdmin && appointment.clinic_id !== clinicId) {
+      return NextResponse.json({ error: 'Нямате достъп до този час' }, { status: 403 })
+    }
+
     return NextResponse.json({ appointment })
   } catch (error) {
     console.error('Get appointment error:', error)
@@ -38,7 +52,32 @@ export async function PUT(
 ) {
   try {
     const { id } = await params
+
+    // Check authentication
+    const { clinicId, isAdmin, error: authError } = await getAuthorizedClinicId()
+
+    if (authError) {
+      return NextResponse.json({ error: authError }, { status: 401 })
+    }
+
     const supabase = createServerSupabaseClient()
+
+    // Verify appointment exists and user has access
+    const { data: existingAppointment, error: fetchError } = await supabase
+      .from('appointments')
+      .select('clinic_id')
+      .eq('id', id)
+      .single()
+
+    if (fetchError || !existingAppointment) {
+      return NextResponse.json({ error: 'Часът не е намерен' }, { status: 404 })
+    }
+
+    // Verify clinic access for non-admin users
+    if (!isAdmin && existingAppointment.clinic_id !== clinicId) {
+      return NextResponse.json({ error: 'Нямате достъп до този час' }, { status: 403 })
+    }
+
     const body = await request.json()
 
     const {
@@ -94,7 +133,31 @@ export async function DELETE(
 ) {
   try {
     const { id } = await params
+
+    // Check authentication
+    const { clinicId, isAdmin, error: authError } = await getAuthorizedClinicId()
+
+    if (authError) {
+      return NextResponse.json({ error: authError }, { status: 401 })
+    }
+
     const supabase = createServerSupabaseClient()
+
+    // Verify appointment exists and user has access
+    const { data: existingAppointment, error: fetchError } = await supabase
+      .from('appointments')
+      .select('clinic_id')
+      .eq('id', id)
+      .single()
+
+    if (fetchError || !existingAppointment) {
+      return NextResponse.json({ error: 'Часът не е намерен' }, { status: 404 })
+    }
+
+    // Verify clinic access for non-admin users
+    if (!isAdmin && existingAppointment.clinic_id !== clinicId) {
+      return NextResponse.json({ error: 'Нямате достъп до този час' }, { status: 403 })
+    }
 
     // Cancel instead of delete
     const { error } = await supabase
