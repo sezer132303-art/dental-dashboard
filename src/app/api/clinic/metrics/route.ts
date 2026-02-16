@@ -17,29 +17,41 @@ export async function GET() {
 
     const supabase = createServerSupabaseClient()
 
-    // Get current week boundaries (Monday to Sunday)
+    // Get current week boundaries (Monday to Sunday) in Bulgaria timezone
+    // Use Europe/Sofia timezone for Bulgaria
+    const bulgariaFormatter = new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'Europe/Sofia',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit'
+    })
+
     const now = new Date()
-    const dayOfWeek = now.getDay() // 0 = Sunday, 1 = Monday, etc.
+    const todayInBulgaria = bulgariaFormatter.format(now) // YYYY-MM-DD format
+
+    // Parse the Bulgaria date to get day of week
+    const [year, month, day] = todayInBulgaria.split('-').map(Number)
+    const bulgariaDate = new Date(year, month - 1, day)
+    const dayOfWeek = bulgariaDate.getDay() // 0 = Sunday, 1 = Monday, etc.
 
     // Calculate days to subtract to get to Monday
     const daysToMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1
 
-    const startOfWeek = new Date(now)
-    startOfWeek.setDate(now.getDate() - daysToMonday)
+    // Calculate start and end of week
+    const startOfWeek = new Date(year, month - 1, day - daysToMonday)
+    const endOfWeek = new Date(year, month - 1, day - daysToMonday + 6)
 
-    const endOfWeek = new Date(startOfWeek)
-    endOfWeek.setDate(startOfWeek.getDate() + 6) // Sunday
-
-    // Format dates as YYYY-MM-DD using local time (not UTC)
-    const formatLocalDate = (date: Date) => {
-      const year = date.getFullYear()
-      const month = String(date.getMonth() + 1).padStart(2, '0')
-      const day = String(date.getDate()).padStart(2, '0')
-      return `${year}-${month}-${day}`
+    // Format dates as YYYY-MM-DD
+    const formatDate = (date: Date) => {
+      const y = date.getFullYear()
+      const m = String(date.getMonth() + 1).padStart(2, '0')
+      const d = String(date.getDate()).padStart(2, '0')
+      return `${y}-${m}-${d}`
     }
 
-    const startDateStr = formatLocalDate(startOfWeek)
-    const endDateStr = formatLocalDate(endOfWeek)
+    const startDateStr = formatDate(startOfWeek)
+    const endDateStr = formatDate(endOfWeek)
+    const todayStr = todayInBulgaria
 
     // Get all appointments for this clinic
     const { data: appointments, error: aptError } = await supabase
@@ -91,8 +103,7 @@ export async function GET() {
     console.log('This week appointments:', thisWeekAppointments.length)
     const appointmentsThisWeekNoShow = thisWeekAppointments.filter(a => a.status === 'no_show').length
 
-    // Today's appointments
-    const todayStr = formatLocalDate(new Date())
+    // Today's appointments (todayStr already defined above using Bulgaria timezone)
     const appointmentsToday = appointments?.filter(a => a.appointment_date === todayStr).length || 0
 
     // Calculate per-doctor stats for this week
@@ -149,7 +160,9 @@ export async function GET() {
       appointmentsToday,
       doctors: doctorStats,
       // Debug info
-      weekRange: { start: startDateStr, end: endDateStr }
+      weekRange: { start: startDateStr, end: endDateStr },
+      today: todayStr,
+      serverTime: new Date().toISOString()
     })
   } catch (error) {
     console.error('Clinic metrics error:', error)

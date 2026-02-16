@@ -54,6 +54,8 @@ interface Metrics {
   appointmentsToday: number
   noShows: number
   doctors: DoctorStats[]
+  weekRange?: { start: string; end: string }
+  today?: string
 }
 
 const COLORS = ['#3B82F6', '#8B5CF6', '#10B981', '#F59E0B', '#EF4444', '#EC4899']
@@ -129,6 +131,8 @@ export default function ClinicDashboardPage() {
           appointmentsThisWeek: metricsData.appointmentsThisWeek || 0,
           appointmentsToday: metricsData.appointmentsToday || 0,
           noShows: metricsData.noShows || 0,
+          weekRange: metricsData.weekRange,
+          today: metricsData.today,
           doctors: (doctorsData.doctors || []).map((d: any) => {
             const stats = doctorStatsMap.get(d.id)
             return {
@@ -182,8 +186,28 @@ export default function ClinicDashboardPage() {
 
   const totalDoctorAppointments = metrics.doctors.reduce((sum, d) => sum + d.patientsThisWeek, 0)
 
+  // Format date for display
+  const formatDateBG = (dateStr: string) => {
+    if (!dateStr) return ''
+    const [year, month, day] = dateStr.split('-')
+    return `${day}.${month}.${year}`
+  }
+
   return (
     <div className="space-y-6">
+      {/* Header with week range */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">Табло</h1>
+          {metrics.weekRange && (
+            <p className="text-sm text-gray-500">
+              Седмица: {formatDateBG(metrics.weekRange.start)} - {formatDateBG(metrics.weekRange.end)}
+              {metrics.today && ` | Днес: ${formatDateBG(metrics.today)}`}
+            </p>
+          )}
+        </div>
+      </div>
+
       {/* KPI Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
         <KpiCard
