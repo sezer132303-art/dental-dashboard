@@ -57,6 +57,8 @@ interface Metrics {
   appointmentsToday: number
   noShows: number
   totalAppointments?: number
+  uniqueDateCount?: number
+  appointmentsPerDateSample?: [string, number][]
   doctors: DoctorStats[]
   weekRange?: { start: string; end: string }
   monthRange?: { start: string; end: string }
@@ -140,6 +142,8 @@ export default function ClinicDashboardPage() {
           appointmentsToday: metricsData.appointmentsToday || 0,
           noShows: metricsData.noShows || 0,
           totalAppointments: metricsData.totalAppointments || 0,
+          uniqueDateCount: metricsData.uniqueDateCount || 0,
+          appointmentsPerDateSample: metricsData.appointmentsPerDateSample,
           weekRange: metricsData.weekRange,
           monthRange: metricsData.monthRange,
           today: metricsData.today,
@@ -221,22 +225,47 @@ export default function ClinicDashboardPage() {
             {currentMonthName} {metrics.currentYear}
             {metrics.today && ` | Днес: ${formatDateBG(metrics.today)}`}
           </p>
+          {metrics.totalAppointments !== metrics.uniqueDateCount && metrics.appointmentsPerDateSample && (
+            <p className="text-xs text-orange-600 mt-1">
+              ⚠️ Внимание: {metrics.totalAppointments} записа в системата за {metrics.uniqueDateCount} различни дати.
+              Примерно: {metrics.appointmentsPerDateSample.slice(0, 3).map(([date, count]) => `${formatDateBG(date)}: ${count} бр.`).join(', ')}
+            </p>
+          )}
         </div>
       </div>
 
-      {/* KPI Cards */}
+      {/* KPI Cards - This Week */}
+      <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-100">
+        <h3 className="text-sm font-semibold text-gray-500 mb-3 uppercase tracking-wider">
+          Тази седмица ({metrics.weekRange ? `${formatDateBG(metrics.weekRange.start)} - ${formatDateBG(metrics.weekRange.end)}` : ''})
+        </h3>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <div className="text-center p-3 bg-blue-50 rounded-lg">
+            <p className="text-3xl font-bold text-blue-600">{metrics.appointmentsThisWeek}</p>
+            <p className="text-xs text-gray-600">Часове</p>
+          </div>
+          <div className="text-center p-3 bg-green-50 rounded-lg">
+            <p className="text-3xl font-bold text-green-600">{metrics.appointmentsToday}</p>
+            <p className="text-xs text-gray-600">Днес</p>
+          </div>
+          <div className="text-center p-3 bg-purple-50 rounded-lg">
+            <p className="text-3xl font-bold text-purple-600">{metrics.doctors.reduce((sum, d) => sum + d.patientsThisWeek, 0)}</p>
+            <p className="text-xs text-gray-600">По лекари</p>
+          </div>
+          <div className="text-center p-3 bg-red-50 rounded-lg">
+            <p className="text-3xl font-bold text-red-600">{metrics.noShows}</p>
+            <p className="text-xs text-gray-600">Неявявания</p>
+          </div>
+        </div>
+      </div>
+
+      {/* KPI Cards - This Month */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
         <KpiCard
           title="Часове този месец"
           value={metrics.appointmentsThisMonth}
           icon={Calendar}
           iconBg="bg-purple-500"
-        />
-        <KpiCard
-          title="Часове днес"
-          value={metrics.appointmentsToday}
-          icon={Clock}
-          iconBg="bg-blue-500"
         />
         <KpiCard
           title="Процент присъствие"
@@ -256,12 +285,6 @@ export default function ClinicDashboardPage() {
           value={metrics.doctors.length}
           icon={Stethoscope}
           iconBg="bg-cyan-500"
-        />
-        <KpiCard
-          title="Неявявания (месец)"
-          value={metrics.noShows}
-          icon={AlertTriangle}
-          iconBg="bg-red-500"
         />
       </div>
 

@@ -88,7 +88,19 @@ export async function GET() {
       appointment_date: normalizeDate(a.appointment_date)
     })) || []
 
+    // Deduplicate appointments by date + time + patient (in case of sync duplicates)
+    const uniqueAppointmentKeys = new Set<string>()
+    const uniqueAppointments = appointments.filter(a => {
+      // Create a unique key from date, time (via id) - we'll use the appointment id for now
+      // But let's count unique dates for reporting
+      return true // Keep all for now, but track
+    })
+
     const totalAppointments = appointments.length
+
+    // Count unique dates
+    const uniqueDates = new Set(appointments.map(a => a.appointment_date))
+    const uniqueDateCount = uniqueDates.size
     const completedAppointments = appointments.filter(a => a.status === 'completed').length
     const cancelledAppointments = appointments.filter(a => a.status === 'cancelled').length
     const noShows = appointments.filter(a => a.status === 'no_show').length
@@ -174,8 +186,15 @@ export async function GET() {
     // Monthly no-shows
     const noShowsThisMonth = thisMonthAppointments.filter(a => a.status === 'no_show').length
 
+    // Count appointments per date to detect duplicates
+    const appointmentsPerDate = new Map<string, number>()
+    appointments.forEach(a => {
+      appointmentsPerDate.set(a.appointment_date, (appointmentsPerDate.get(a.appointment_date) || 0) + 1)
+    })
+
     return NextResponse.json({
       totalAppointments,
+      uniqueDateCount,
       completedAppointments,
       cancelledAppointments,
       scheduledAppointments,
@@ -195,7 +214,9 @@ export async function GET() {
       monthRange: { start: startMonthStr, end: endMonthStr },
       today: todayStr,
       currentMonth: month,
-      currentYear: year
+      currentYear: year,
+      // Debug: appointments per date (to check for duplicates)
+      appointmentsPerDateSample: Array.from(appointmentsPerDate.entries()).slice(0, 10)
     })
   } catch (error) {
     console.error('Clinic metrics error:', error)
