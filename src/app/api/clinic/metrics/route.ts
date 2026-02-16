@@ -115,6 +115,9 @@ export async function GET() {
       // Table may not exist, ignore
     }
 
+    // Weekly no-shows
+    const noShowsThisWeek = thisWeekAppointments.filter(a => a.status === 'no_show').length
+
     return NextResponse.json({
       totalAppointments,
       completedAppointments,
@@ -122,13 +125,16 @@ export async function GET() {
       scheduledAppointments,
       confirmedAppointments,
       pendingAppointments: scheduledAppointments + confirmedAppointments,
-      noShows,
+      noShows: noShowsThisWeek, // Changed to weekly no-shows for dashboard
+      noShowsTotal: noShows, // Keep total for other uses
       totalPatients: totalPatients || 0,
       activeConversations,
       attendanceRate,
       appointmentsThisWeek,
       appointmentsToday,
-      doctors: doctorStats
+      doctors: doctorStats,
+      // Debug info
+      weekRange: { start: startDateStr, end: endDateStr }
     })
   } catch (error) {
     console.error('Clinic metrics error:', error)
