@@ -50,10 +50,35 @@ export async function GET() {
     // Get ALL appointments for this clinic
     const { data: allAppointments, error: aptError } = await supabase
       .from('appointments')
-      .select('id, appointment_date, start_time, status, patient_id, doctor_id')
+      .select('id, appointment_date, start_time, status, patient_id, doctor_id, google_event_id, source')
       .eq('clinic_id', clinicId)
       .order('appointment_date', { ascending: false })
-      .limit(20)
+      .limit(100)
+
+    // Check for duplicates by google_event_id
+    const eventIdCounts = new Map<string, number>()
+    allAppointments?.forEach(apt => {
+      if (apt.google_event_id) {
+        eventIdCounts.set(apt.google_event_id, (eventIdCounts.get(apt.google_event_id) || 0) + 1)
+      }
+    })
+    const duplicateEventIds = Array.from(eventIdCounts.entries())
+      .filter(([, count]) => count > 1)
+      .map(([id, count]) => ({ google_event_id: id, count }))
+
+    // Count appointments by source
+    const bySource = {
+      google_calendar: allAppointments?.filter(a => a.source === 'google_calendar').length || 0,
+      manual: allAppointments?.filter(a => !a.source || a.source === 'manual').length || 0,
+      whatsapp: allAppointments?.filter(a => a.source === 'whatsapp').length || 0,
+      other: allAppointments?.filter(a => a.source && !['google_calendar', 'manual', 'whatsapp'].includes(a.source)).length || 0
+    }
+
+    // Count total appointments
+    const { count: totalCount } = await supabase
+      .from('appointments')
+      .select('id', { count: 'exact', head: true })
+      .eq('clinic_id', clinicId)
 
     // Get ALL patients
     const { data: allPatients, count: patientCount } = await supabase
@@ -88,12 +113,18 @@ export async function GET() {
         dayOfWeek: ['Неделя', 'Понеделник', 'Вторник', 'Сряда', 'Четвъртък', 'Петък', 'Събота'][dayOfWeek]
       },
       appointments: {
-        total: allAppointments?.length || 0,
+        totalInDb: totalCount || 0,
+        inSample: allAppointments?.length || 0,
         thisWeek: thisWeekAppointments.length,
-        sample: allAppointments?.slice(0, 5).map(a => ({
+        bySource,
+        duplicateEventIds: duplicateEventIds.slice(0, 10),
+        hasDuplicates: duplicateEventIds.length > 0,
+        sample: allAppointments?.slice(0, 10).map(a => ({
           date: a.appointment_date,
           time: a.start_time,
-          status: a.status
+          status: a.status,
+          source: a.source,
+          google_event_id: a.google_event_id?.slice(0, 20) + '...'
         }))
       },
       patients: {
