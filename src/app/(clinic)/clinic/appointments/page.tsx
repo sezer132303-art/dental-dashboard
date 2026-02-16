@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { Calendar, Search, Filter, ChevronLeft, ChevronRight, Loader2 } from 'lucide-react'
+import { Calendar, Search, Filter, ChevronLeft, ChevronRight, Loader2, ChevronDown } from 'lucide-react'
 
 interface Appointment {
   id: string
@@ -32,10 +32,22 @@ export default function ClinicAppointments() {
   const [page, setPage] = useState(1)
   const [totalPages, setTotalPages] = useState(1)
   const [updatingId, setUpdatingId] = useState<string | null>(null)
+  const [openDropdown, setOpenDropdown] = useState<string | null>(null)
 
   useEffect(() => {
     fetchAppointments()
   }, [page, statusFilter])
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    function handleClickOutside() {
+      setOpenDropdown(null)
+    }
+    if (openDropdown) {
+      document.addEventListener('click', handleClickOutside)
+      return () => document.removeEventListener('click', handleClickOutside)
+    }
+  }, [openDropdown])
 
   async function fetchAppointments() {
     try {
@@ -63,6 +75,7 @@ export default function ClinicAppointments() {
 
   async function updateStatus(appointmentId: string, newStatus: string) {
     setUpdatingId(appointmentId)
+    setOpenDropdown(null)
     try {
       const response = await fetch(`/api/clinic/appointments/${appointmentId}`, {
         method: 'PUT',
@@ -240,41 +253,40 @@ export default function ClinicAppointments() {
                         )}
                       </td>
                       <td className="px-6 py-4">
-                        <div className="flex gap-1" onClick={(e) => e.stopPropagation()}>
+                        <div className="relative" onClick={(e) => e.stopPropagation()}>
                           {updatingId === apt.id ? (
                             <Loader2 className="w-4 h-4 animate-spin text-gray-400" />
                           ) : (
                             <>
-                              {(apt.status === 'scheduled' || apt.status === 'confirmed') && (
-                                <>
-                                  <button
-                                    onClick={() => updateStatus(apt.id, 'completed')}
-                                    className="px-2 py-1 text-xs text-green-600 hover:bg-green-50 rounded font-medium"
-                                  >
-                                    Завърши
-                                  </button>
-                                  <button
-                                    onClick={() => updateStatus(apt.id, 'no_show')}
-                                    className="px-2 py-1 text-xs text-red-600 hover:bg-red-50 rounded font-medium"
-                                  >
-                                    Неявил се
-                                  </button>
-                                  <button
-                                    onClick={() => updateStatus(apt.id, 'cancelled')}
-                                    className="px-2 py-1 text-xs text-gray-600 hover:bg-gray-50 rounded font-medium"
-                                  >
-                                    Отмени
-                                  </button>
-                                </>
-                              )}
-                              {apt.status === 'completed' && (
-                                <span className="text-xs text-gray-400">Завършен</span>
-                              )}
-                              {apt.status === 'cancelled' && (
-                                <span className="text-xs text-gray-400">Отменен</span>
-                              )}
-                              {apt.status === 'no_show' && (
-                                <span className="text-xs text-gray-400">Неявил се</span>
+                              <button
+                                onClick={() => setOpenDropdown(openDropdown === apt.id ? null : apt.id)}
+                                className={`px-3 py-1.5 rounded text-xs font-medium flex items-center gap-1 ${statusColors[apt.status] || 'bg-gray-100 text-gray-700'}`}
+                              >
+                                {statusLabels[apt.status] || apt.status}
+                                <ChevronDown className="w-3 h-3" />
+                              </button>
+
+                              {openDropdown === apt.id && (
+                                <div className="absolute right-0 top-full mt-1 bg-white rounded-lg shadow-lg border z-20 py-1 min-w-[160px]">
+                                  {Object.entries(statusLabels).map(([value, label]) => (
+                                    <button
+                                      key={value}
+                                      onClick={() => {
+                                        if (value !== apt.status) {
+                                          updateStatus(apt.id, value)
+                                        }
+                                        setOpenDropdown(null)
+                                      }}
+                                      className={`w-full px-3 py-2 text-left text-sm hover:bg-gray-50 flex items-center gap-2 ${apt.status === value ? 'bg-gray-100' : ''}`}
+                                    >
+                                      <span className={`w-2 h-2 rounded-full ${statusColors[value]?.split(' ')[0] || 'bg-gray-300'}`}></span>
+                                      {label}
+                                      {apt.status === value && (
+                                        <span className="ml-auto text-green-600">✓</span>
+                                      )}
+                                    </button>
+                                  ))}
+                                </div>
                               )}
                             </>
                           )}
