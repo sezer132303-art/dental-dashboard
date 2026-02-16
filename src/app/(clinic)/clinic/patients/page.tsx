@@ -28,11 +28,11 @@ interface Appointment {
 }
 
 const statusOptions = [
-  { value: 'scheduled', label: 'Насрочен', color: 'bg-blue-100 text-blue-700' },
-  { value: 'confirmed', label: 'Потвърден', color: 'bg-indigo-100 text-indigo-700' },
-  { value: 'completed', label: 'Завършен', color: 'bg-green-100 text-green-700' },
-  { value: 'no_show', label: 'Неявяване', color: 'bg-red-100 text-red-700' },
-  { value: 'cancelled', label: 'Отменен', color: 'bg-gray-100 text-gray-700' }
+  { value: 'scheduled', label: 'Насрочен', color: 'bg-blue-500 text-white' },
+  { value: 'confirmed', label: 'Потвърден', color: 'bg-indigo-500 text-white' },
+  { value: 'completed', label: 'Завършен', color: 'bg-green-600 text-white' },
+  { value: 'no_show', label: 'Неявяване', color: 'bg-orange-500 text-white' },
+  { value: 'cancelled', label: 'Отменен', color: 'bg-red-500 text-white' }
 ]
 
 export default function ClinicPatients() {
@@ -330,10 +330,10 @@ export default function ClinicPatients() {
                       <button
                         onClick={() => handleAppointmentStatusChange(activeApt.id, 'completed')}
                         disabled={updatingAppointmentId === activeApt.id}
-                        className="px-3 py-1.5 bg-green-100 text-green-700 hover:bg-green-200 rounded-lg text-sm font-medium flex items-center gap-1 disabled:opacity-50"
+                        className="px-4 py-2 bg-green-600 text-white hover:bg-green-700 rounded-lg text-sm font-semibold flex items-center gap-2 disabled:opacity-50 shadow-sm"
                       >
                         {updatingAppointmentId === activeApt.id ? (
-                          <Loader2 className="w-3 h-3 animate-spin" />
+                          <Loader2 className="w-4 h-4 animate-spin" />
                         ) : (
                           <CheckCircle className="w-4 h-4" />
                         )}
@@ -342,10 +342,10 @@ export default function ClinicPatients() {
                       <button
                         onClick={() => handleAppointmentStatusChange(activeApt.id, 'no_show')}
                         disabled={updatingAppointmentId === activeApt.id}
-                        className="px-3 py-1.5 bg-red-100 text-red-700 hover:bg-red-200 rounded-lg text-sm font-medium flex items-center gap-1 disabled:opacity-50"
+                        className="px-4 py-2 bg-orange-500 text-white hover:bg-orange-600 rounded-lg text-sm font-semibold flex items-center gap-2 disabled:opacity-50 shadow-sm"
                       >
                         {updatingAppointmentId === activeApt.id ? (
-                          <Loader2 className="w-3 h-3 animate-spin" />
+                          <Loader2 className="w-4 h-4 animate-spin" />
                         ) : (
                           <XCircle className="w-4 h-4" />
                         )}
@@ -354,10 +354,10 @@ export default function ClinicPatients() {
                       <button
                         onClick={() => handleAppointmentStatusChange(activeApt.id, 'cancelled')}
                         disabled={updatingAppointmentId === activeApt.id}
-                        className="px-3 py-1.5 bg-gray-100 text-gray-700 hover:bg-gray-200 rounded-lg text-sm font-medium flex items-center gap-1 disabled:opacity-50"
+                        className="px-4 py-2 bg-red-500 text-white hover:bg-red-600 rounded-lg text-sm font-semibold flex items-center gap-2 disabled:opacity-50 shadow-sm"
                       >
                         {updatingAppointmentId === activeApt.id ? (
-                          <Loader2 className="w-3 h-3 animate-spin" />
+                          <Loader2 className="w-4 h-4 animate-spin" />
                         ) : (
                           <X className="w-4 h-4" />
                         )}
@@ -505,17 +505,17 @@ export default function ClinicPatients() {
                           </button>
 
                           {openStatusDropdown === apt.id && (
-                            <div className="absolute right-0 top-full mt-1 bg-white rounded-lg shadow-lg border z-10 py-1 min-w-[140px]">
+                            <div className="absolute right-0 top-full mt-1 bg-white rounded-lg shadow-xl border z-10 py-1 min-w-[180px]">
                               {statusOptions.map((option) => (
                                 <button
                                   key={option.value}
                                   onClick={() => handleAppointmentStatusChange(apt.id, option.value)}
-                                  className={`w-full px-3 py-2 text-left text-sm hover:bg-gray-50 flex items-center gap-2 ${apt.status === option.value ? 'bg-gray-100' : ''}`}
+                                  className={`w-full px-3 py-2.5 text-left text-sm font-medium hover:bg-gray-100 flex items-center gap-3 ${apt.status === option.value ? 'bg-blue-50' : ''}`}
                                 >
-                                  <span className={`w-2 h-2 rounded-full ${option.color.split(' ')[0]}`}></span>
-                                  {option.label}
+                                  <span className={`w-3 h-3 rounded-full ${option.color.split(' ')[0]}`}></span>
+                                  <span className="text-gray-800">{option.label}</span>
                                   {apt.status === option.value && (
-                                    <CheckCircle className="w-3 h-3 ml-auto text-green-600" />
+                                    <CheckCircle className="w-4 h-4 ml-auto text-green-600" />
                                   )}
                                 </button>
                               ))}
