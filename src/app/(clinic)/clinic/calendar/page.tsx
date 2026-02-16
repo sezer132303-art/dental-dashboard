@@ -162,14 +162,31 @@ export default function ClinicCalendarPage() {
         params.append('doctorId', selectedDoctor.id)
       }
 
+      console.log('[Calendar] Fetching appointments:', { startDate, endDate, doctorId: selectedDoctor?.id })
+
       const response = await fetch(`/api/clinic/appointments?${params.toString()}`)
       const data = await response.json()
 
+      console.log('[Calendar] API response:', { ok: response.ok, status: response.status, data })
+
+      if (!response.ok) {
+        console.error('[Calendar] API error:', data.error || 'Unknown error')
+        // If unauthorized, the user needs to re-login
+        if (response.status === 401) {
+          console.error('[Calendar] User not authenticated - please re-login')
+        }
+        return
+      }
+
       if (data.appointments) {
+        console.log('[Calendar] Loaded', data.appointments.length, 'appointments')
         setAppointments(data.appointments)
+      } else {
+        console.log('[Calendar] No appointments in response')
+        setAppointments([])
       }
     } catch (err) {
-      console.error('Error fetching appointments:', err)
+      console.error('[Calendar] Error fetching appointments:', err)
     } finally {
       setLoading(false)
     }
