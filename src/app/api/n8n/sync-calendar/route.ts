@@ -61,26 +61,40 @@ export async function POST(request: NextRequest) {
           continue
         }
 
-        // Parse date and time early - needed for duplicate check
-        const startDate = new Date(apt.startTime)
-        const endDate = new Date(apt.endTime)
+        // Parse date and time in Bulgaria timezone (Europe/Sofia)
+        // Google Calendar returns ISO strings like "2026-02-19T16:00:00+02:00"
+        // We need to extract the LOCAL time, not convert to server timezone (UTC)
+        const TIMEZONE = 'Europe/Sofia'
 
-        const formatLocalDate = (date: Date) => {
-          const year = date.getFullYear()
-          const month = String(date.getMonth() + 1).padStart(2, '0')
-          const day = String(date.getDate()).padStart(2, '0')
-          return `${year}-${month}-${day}`
+        const formatInTimezone = (isoString: string) => {
+          const date = new Date(isoString)
+
+          // Get date parts in Bulgaria timezone
+          const formatter = new Intl.DateTimeFormat('en-CA', {
+            timeZone: TIMEZONE,
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit',
+            hour: '2-digit',
+            minute: '2-digit',
+            hour12: false
+          })
+
+          const parts = formatter.formatToParts(date)
+          const getPart = (type: string) => parts.find(p => p.type === type)?.value || '00'
+
+          return {
+            date: `${getPart('year')}-${getPart('month')}-${getPart('day')}`,
+            time: `${getPart('hour')}:${getPart('minute')}`
+          }
         }
 
-        const formatLocalTime = (date: Date) => {
-          const hours = String(date.getHours()).padStart(2, '0')
-          const minutes = String(date.getMinutes()).padStart(2, '0')
-          return `${hours}:${minutes}`
-        }
+        const startParsed = formatInTimezone(apt.startTime)
+        const endParsed = formatInTimezone(apt.endTime)
 
-        const appointmentDate = formatLocalDate(startDate)
-        const startTime = formatLocalTime(startDate)
-        const endTime = formatLocalTime(endDate)
+        const appointmentDate = startParsed.date
+        const startTime = startParsed.time
+        const endTime = endParsed.time
 
         // Check for existing appointment without google_event_id (created via API)
         // Match by date, time, and clinic to prevent duplicates
@@ -175,10 +189,11 @@ export async function POST(request: NextRequest) {
         // Debug logging
         console.log('Sync appointment:', {
           originalStartTime: apt.startTime,
-          parsedDate: startDate.toString(),
+          originalEndTime: apt.endTime,
           appointmentDate,
           startTime,
-          endTime
+          endTime,
+          timezone: TIMEZONE
         })
 
         // Create or update appointment (upsert to prevent duplicates)
