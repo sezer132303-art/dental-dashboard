@@ -19,7 +19,7 @@ export async function GET(request: NextRequest) {
 
     let query = supabase
       .from('doctors')
-      .select('id, name, clinic_id, google_calendar_id, is_active')
+      .select('id, name, clinic_id, calendar_id, is_active')
       .eq('is_active', true)
       .order('name')
 
