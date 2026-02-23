@@ -288,10 +288,19 @@ export default function CalendarPage() {
     const startHour = parseInt(startParts[0]) + parseInt(startParts[1]) / 60
     const endHour = parseInt(endParts[0]) + parseInt(endParts[1]) / 60
 
-    const top = (startHour - 8) * 60 // 60px per hour, starting from 8:00
-    const height = (endHour - startHour) * 60
+    // Clamp to visible hours (8:00 - 18:00)
+    const clampedStart = Math.max(startHour, 8)
+    const clampedEnd = Math.min(endHour, 19) // 18:00 + 1 hour buffer
 
-    return { top, height }
+    const top = Math.max(0, (clampedStart - 8) * 60) // 60px per hour, starting from 8:00
+    const height = Math.max(45, (clampedEnd - clampedStart) * 60) // Minimum 45px for visible content
+
+    // Max height is the grid height (11 hours * 60px = 660px)
+    const maxTop = 11 * 60
+    const clampedTop = Math.min(top, maxTop - 45)
+    const clampedHeight = Math.min(height, maxTop - clampedTop)
+
+    return { top: clampedTop, height: clampedHeight }
   }
 
   const prevWeek = () => {
@@ -767,7 +776,7 @@ export default function CalendarPage() {
               </div>
 
               {/* Time Grid */}
-              <div className="relative">
+              <div className="relative overflow-hidden">
                 {/* Hour Lines */}
                 {HOURS.map((hour) => (
                   <div
@@ -792,10 +801,10 @@ export default function CalendarPage() {
                 ))}
 
                 {/* Appointments Overlay */}
-                <div className="absolute inset-0 grid grid-cols-8 pointer-events-none">
+                <div className="absolute inset-0 grid grid-cols-8 pointer-events-none overflow-hidden">
                   <div /> {/* Time column spacer */}
                   {weekDays.map((day, dayIndex) => (
-                    <div key={dayIndex} className="relative">
+                    <div key={dayIndex} className="relative overflow-hidden">
                       {getAppointmentsForDay(day).map((apt) => {
                         const { top, height } = getAppointmentPosition(apt)
                         const doctorColor = apt.doctor?.color || 'bg-blue-500'
@@ -807,29 +816,25 @@ export default function CalendarPage() {
                               'absolute left-1 right-1 rounded-md px-2 py-1 text-white text-xs overflow-hidden pointer-events-auto cursor-pointer hover:opacity-90 hover:shadow-lg transition',
                               statusColors[apt.status] || doctorColor
                             )}
-                            style={{ top: `${top}px`, height: `${Math.max(height, 20)}px` }}
-                            title={`${apt.patient?.name || 'Пациент'} - ${apt.type || 'Преглед'} - ${apt.start_time.slice(0, 5)}`}
+                            style={{ top: `${top}px`, height: `${Math.max(height, 45)}px` }}
+                            title={`${apt.patient?.name || 'Пациент'} - ${apt.type || 'Преглед'} - ${apt.start_time.slice(0, 5)} - ${apt.end_time.slice(0, 5)}`}
                             onClick={() => openAppointmentModal(apt)}
                           >
-                            {/* Always show time */}
-                            <div className="font-semibold">
-                              {apt.start_time.slice(0, 5)}
+                            {/* Always show time range */}
+                            <div className="font-semibold text-[11px] leading-tight">
+                              {apt.start_time.slice(0, 5)} - {apt.end_time.slice(0, 5)}
                             </div>
-                            {/* Show patient name if space */}
-                            {height > 25 && (
-                              <div className="font-medium truncate">
-                                {apt.patient?.name || 'Пациент'}
-                              </div>
-                            )}
-                            {/* Show service type if more space */}
-                            {height > 45 && (
-                              <div className="text-white/80 truncate text-[10px]">
-                                {apt.type || 'Преглед'}
-                              </div>
-                            )}
-                            {/* Show doctor if even more space and viewing all doctors */}
-                            {height > 60 && apt.doctor && !selectedDoctor && (
-                              <div className="text-white/80 truncate text-[10px]">
+                            {/* Always show patient name */}
+                            <div className="font-medium truncate text-[11px] leading-tight">
+                              {apt.patient?.name || 'Пациент'}
+                            </div>
+                            {/* Always show service type */}
+                            <div className="text-white/90 truncate text-[10px] leading-tight">
+                              {apt.type || 'Преглед'}
+                            </div>
+                            {/* Show doctor if more space and viewing all doctors */}
+                            {height > 55 && apt.doctor && !selectedDoctor && (
+                              <div className="text-white/80 truncate text-[9px] leading-tight">
                                 {apt.doctor.name}
                               </div>
                             )}

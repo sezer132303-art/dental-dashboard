@@ -20,10 +20,7 @@ import {
   YAxis,
   CartesianGrid,
   Tooltip,
-  ResponsiveContainer,
-  PieChart,
-  Pie,
-  Cell
+  ResponsiveContainer
 } from 'recharts'
 
 interface DoctorStats {
@@ -46,8 +43,6 @@ interface Metrics {
   noShows: number
   doctors: DoctorStats[]
 }
-
-const COLORS = ['#3B82F6', '#8B5CF6', '#10B981', '#F59E0B', '#EF4444', '#EC4899']
 
 interface KpiCardProps {
   title: string
@@ -141,8 +136,6 @@ export default function DashboardPage() {
     appointments: d.patientsThisWeek
   }))
 
-  const totalDoctorAppointments = metrics.doctors.reduce((sum, d) => sum + d.patientsThisWeek, 0)
-
   return (
     <div className="space-y-6">
       {/* KPI Cards */}
@@ -188,77 +181,35 @@ export default function DashboardPage() {
       </div>
 
       {/* Charts */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Doctor Appointments Chart */}
-        <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">
-            Часове по лекари (тази седмица)
-          </h3>
-          {doctorChartData.length > 0 ? (
-            <ResponsiveContainer width="100%" height={300}>
-              <BarChart data={doctorChartData}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                <XAxis dataKey="name" stroke="#374151" fontSize={12} />
-                <YAxis stroke="#374151" fontSize={12} />
-                <Tooltip
-                  contentStyle={{
-                    backgroundColor: 'white',
-                    border: '1px solid #e5e7eb',
-                    borderRadius: '8px'
-                  }}
-                />
-                <Bar
-                  dataKey="appointments"
-                  fill="#8B5CF6"
-                  radius={[4, 4, 0, 0]}
-                />
-              </BarChart>
-            </ResponsiveContainer>
-          ) : (
-            <div className="h-[300px] flex items-center justify-center text-gray-400">
-              Няма данни
-            </div>
-          )}
-        </div>
-
-        {/* Doctor Distribution Pie */}
-        <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">
-            Разпределение по лекари
-          </h3>
-          {doctorChartData.length > 0 && totalDoctorAppointments > 0 ? (
-            <ResponsiveContainer width="100%" height={300}>
-              <PieChart>
-                <Pie
-                  data={doctorChartData}
-                  cx="50%"
-                  cy="50%"
-                  innerRadius={60}
-                  outerRadius={100}
-                  paddingAngle={2}
-                  dataKey="appointments"
-                  label={({ name, percent }) => `${name} (${((percent || 0) * 100).toFixed(0)}%)`}
-                  labelLine={false}
-                >
-                  {doctorChartData.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                  ))}
-                </Pie>
-                <Tooltip
-                  contentStyle={{
-                    backgroundColor: 'white',
-                    border: '1px solid #e5e7eb',
-                    borderRadius: '8px'
-                  }}
-                />
-              </PieChart>
-            </ResponsiveContainer>
-          ) : (
-            <div className="h-[300px] flex items-center justify-center text-gray-400">
-              Няма данни
-            </div>
-          )}
-        </div>
+      <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
+        <h3 className="text-lg font-semibold text-gray-900 mb-4">
+          Часове по лекари (тази седмица)
+        </h3>
+        {doctorChartData.length > 0 ? (
+          <ResponsiveContainer width="100%" height={300}>
+            <BarChart data={doctorChartData}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+              <XAxis dataKey="name" stroke="#374151" fontSize={12} />
+              <YAxis stroke="#374151" fontSize={12} />
+              <Tooltip
+                contentStyle={{
+                  backgroundColor: 'white',
+                  border: '1px solid #e5e7eb',
+                  borderRadius: '8px'
+                }}
+              />
+              <Bar
+                dataKey="appointments"
+                fill="#8B5CF6"
+                radius={[4, 4, 0, 0]}
+              />
+            </BarChart>
+          </ResponsiveContainer>
+        ) : (
+          <div className="h-[300px] flex items-center justify-center text-gray-400">
+            Няма данни
+          </div>
+        )}
       </div>
 
       {/* Doctor Stats Table */}

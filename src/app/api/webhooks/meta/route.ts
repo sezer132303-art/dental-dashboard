@@ -68,15 +68,28 @@ export async function GET(request: NextRequest) {
 // POST /api/webhooks/meta - Receive messages
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json()
+    // Get raw body for signature verification (before parsing)
+    const rawBody = await request.text()
+    const body = JSON.parse(rawBody)
 
-    // Verify signature if app secret is configured
+    // Verify signature - REQUIRED in production
     const signature = request.headers.get('x-hub-signature-256')
-    if (signature && process.env.META_APP_SECRET) {
-      const rawBody = JSON.stringify(body)
+    const appSecret = process.env.META_APP_SECRET
+
+    if (!appSecret && process.env.NODE_ENV === 'production') {
+      console.error('META_APP_SECRET is not configured in production')
+      return NextResponse.json({ error: 'Server misconfigured' }, { status: 500 })
+    }
+
+    if (appSecret) {
+      if (!signature) {
+        console.warn('Meta webhook missing signature')
+        return NextResponse.json({ error: 'Missing signature' }, { status: 401 })
+      }
+
       const expectedSignature = 'sha256=' + crypto
-        .createHmac('sha256', process.env.META_APP_SECRET)
-        .update(rawBody)
+        .createHmac('sha256', appSecret)
+        .update(rawBody, 'utf8')
         .digest('hex')
 
       if (signature !== expectedSignature) {

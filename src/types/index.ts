@@ -1,3 +1,7 @@
+// =============================================
+// USER & AUTHENTICATION TYPES
+// =============================================
+
 export type UserRole = 'admin' | 'doctor' | 'receptionist' | 'clinic'
 
 export interface User {
@@ -73,47 +77,157 @@ export const ROLE_PERMISSIONS = {
 
 export type Permission = typeof ROLE_PERMISSIONS[UserRole][number]
 
+// =============================================
+// CLINIC TYPES
+// =============================================
+
 export interface Clinic {
   id: string
   name: string
   whatsapp_instance: string | null
+  whatsapp_api_key: string | null
+  evolution_api_url: string | null
   created_at: string
 }
 
-export interface Client {
-  phone: string
-  name: string | null
-  first_contact_at: string
-  last_contact_at: string
-  total_appointments: number
-  cancelled_appointments: number
-  completed_appointments: number
-  no_show_count: number
-  notes: string | null
-  clinic_id: string | null
+// =============================================
+// DOCTOR TYPES
+// =============================================
+
+export interface Doctor {
+  id: string
+  user_id: string | null
+  clinic_id: string
+  name: string
+  specialty: string | null
+  phone: string | null
+  email: string | null
+  bio: string | null
+  avatar_url: string | null
+  color: string
+  calendar_id: string | null
+  is_active: boolean
+  working_hours: Record<string, { start: string; end: string }> | null
+  created_at: string
+  updated_at: string
 }
+
+// =============================================
+// PATIENT TYPES
+// =============================================
+
+export interface Patient {
+  id: string
+  clinic_id: string
+  name: string
+  phone: string
+  email: string | null
+  date_of_birth: string | null
+  gender: string | null
+  address: string | null
+  notes: string | null
+  medical_history: string | null
+  allergies: string | null
+  is_active: boolean
+  created_at: string
+  updated_at: string
+}
+
+// =============================================
+// APPOINTMENT TYPES
+// =============================================
+
+export type AppointmentStatus = 'scheduled' | 'confirmed' | 'completed' | 'cancelled' | 'no_show'
+export type AppointmentSource = 'manual' | 'google_calendar' | 'whatsapp' | 'messenger' | 'instagram' | 'viber'
 
 export interface Appointment {
   id: string
-  google_event_id: string
-  client_phone: string
-  client_name: string
-  service: string
-  service_duration: number
-  doctor_name: string
-  doctor_calendar_id: string
-  appointment_datetime: string
-  status: 'confirmed' | 'completed' | 'cancelled' | 'no-show'
-  created_at: string
-  cancelled_at: string | null
-  completed_at: string | null
-  reminder_24h_sent: boolean
-  reminder_24h_sent_at: string | null
-  reminder_3h_sent: boolean
-  reminder_3h_sent_at: string | null
+  clinic_id: string
+  doctor_id: string
+  patient_id: string | null
+  appointment_date: string  // DATE format: YYYY-MM-DD
+  start_time: string        // TIME format: HH:MM
+  end_time: string          // TIME format: HH:MM
+  status: AppointmentStatus
+  type: string | null
   notes: string | null
-  clinic_id: string | null
+  price: number | null
+  source: AppointmentSource
+  google_event_id: string | null
+  created_by: string | null
+  created_at: string
+  updated_at: string
+  // Joined fields (when selecting with relations)
+  doctor?: Doctor
+  patient?: Patient
 }
+
+export interface AppointmentType {
+  id: string
+  clinic_id: string
+  name: string
+  duration_minutes: number
+  color: string
+  price: number | null
+  is_active: boolean
+  created_at: string
+}
+
+// =============================================
+// REMINDER TYPES
+// =============================================
+
+export type ReminderType = '24h' | '3h' | 'confirmation' | 'followup'
+export type ReminderStatus = 'pending' | 'sent' | 'failed'
+
+export interface Reminder {
+  id: string
+  appointment_id: string
+  type: ReminderType
+  status: ReminderStatus
+  scheduled_for: string
+  sent_at: string | null
+  error_message: string | null
+  message_id: string | null
+  created_at: string
+}
+
+// =============================================
+// CONVERSATION & MESSAGE TYPES
+// =============================================
+
+export type MessagingChannel = 'whatsapp' | 'messenger' | 'instagram' | 'viber'
+
+export interface Conversation {
+  id: string
+  clinic_id: string
+  channel: MessagingChannel
+  channel_user_id: string
+  patient_id: string | null
+  patient_phone: string | null
+  status: string
+  last_message_at: string
+  metadata: Record<string, unknown>
+  created_at: string
+  // Joined fields
+  patient?: Patient
+  messages?: Message[]
+}
+
+export interface Message {
+  id: string
+  conversation_id: string
+  direction: 'inbound' | 'outbound'
+  content: string
+  parsed_intent: string | null
+  channel_message_id: string | null
+  status: 'sent' | 'delivered' | 'read' | 'failed'
+  sent_at: string
+}
+
+// =============================================
+// AUTH TYPES
+// =============================================
 
 export interface AuthToken {
   id: string
@@ -124,7 +238,10 @@ export interface AuthToken {
   created_at: string
 }
 
-// Dashboard metrics types
+// =============================================
+// DASHBOARD & ANALYTICS TYPES
+// =============================================
+
 export interface DashboardMetrics {
   totalClients: number
   clientGrowthPercent: number
@@ -152,4 +269,21 @@ export interface DoctorStats {
   noShows: number
   cancelled: number
   attendanceRate: number
+}
+
+// =============================================
+// API TYPES
+// =============================================
+
+export interface ApiError {
+  error: string
+  details?: string
+}
+
+export interface PaginatedResponse<T> {
+  data: T[]
+  total: number
+  page: number
+  limit: number
+  hasMore: boolean
 }

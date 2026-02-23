@@ -1,11 +1,20 @@
 import { NextRequest } from 'next/server'
 import { createServerSupabaseClient } from './supabase'
+import crypto from 'crypto'
 
 export interface ApiKeyValidation {
   isValid: boolean
   keyId?: string
+  clinicId?: string
   permissions?: string[]
   error?: string
+}
+
+/**
+ * Hash API key using SHA-256 for secure comparison
+ */
+function hashApiKey(key: string): string {
+  return crypto.createHash('sha256').update(key).digest('hex')
 }
 
 /**
@@ -19,37 +28,42 @@ export async function validateApiKey(request: NextRequest): Promise<ApiKeyValida
     return { isValid: false, error: 'Missing API key' }
   }
 
-  // In development, accept a simple key
-  if (process.env.NODE_ENV === 'development' && apiKey === process.env.N8N_API_KEY) {
-    return { isValid: true, permissions: ['read', 'write'] }
+  // Check against environment variable (primary method)
+  const envApiKey = process.env.N8N_API_KEY
+  if (envApiKey && apiKey === envApiKey) {
+    return {
+      isValid: true,
+      clinicId: getDefaultClinicId(),
+      permissions: ['read', 'write']
+    }
   }
 
-  // Check against environment variable first (simpler approach)
-  if (apiKey === process.env.N8N_API_KEY) {
-    return { isValid: true, permissions: ['read', 'write'] }
-  }
-
+  // Fallback: check against hashed keys in database
   try {
     const supabase = createServerSupabaseClient()
+    const keyHash = hashApiKey(apiKey)
 
-    // For production: check against hashed keys in database
-    // This is a simplified version - in production use bcrypt comparison
-    const { data: keys, error } = await supabase
+    const { data: keyRecord, error } = await supabase
       .from('api_keys')
-      .select('id, permissions')
+      .select('id, clinic_id, permissions')
       .eq('is_active', true)
-      .eq('name', 'n8n-integration')
+      .eq('key_hash', keyHash)
+      .maybeSingle()
 
-    if (error || !keys?.length) {
+    if (error) {
+      console.error('API key lookup error:', error)
+      return { isValid: false, error: 'Validation error' }
+    }
+
+    if (!keyRecord) {
       return { isValid: false, error: 'Invalid API key' }
     }
 
-    // Simple key match for now
-    // In production, use bcrypt.compare with key_hash
     return {
       isValid: true,
-      keyId: keys[0].id,
-      permissions: keys[0].permissions
+      keyId: keyRecord.id,
+      clinicId: keyRecord.clinic_id,
+      permissions: keyRecord.permissions || ['read', 'write']
     }
 
   } catch (error) {
@@ -59,9 +73,34 @@ export async function validateApiKey(request: NextRequest): Promise<ApiKeyValida
 }
 
 /**
- * Get default clinic ID
- * In a multi-clinic setup, this would come from the API key or request
+ * Get default clinic ID from environment
+ * Throws error if not configured - prevents silent failures
  */
 export function getDefaultClinicId(): string {
-  return process.env.DEFAULT_CLINIC_ID || '00000000-0000-0000-0000-000000000001'
+  const clinicId = process.env.DEFAULT_CLINIC_ID
+
+  if (!clinicId) {
+    console.error('DEFAULT_CLINIC_ID environment variable is not set')
+    throw new Error('DEFAULT_CLINIC_ID is required but not configured')
+  }
+
+  // Validate UUID format
+  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+  if (!uuidRegex.test(clinicId)) {
+    console.error('DEFAULT_CLINIC_ID is not a valid UUID:', clinicId)
+    throw new Error('DEFAULT_CLINIC_ID must be a valid UUID')
+  }
+
+  return clinicId
+}
+
+/**
+ * Safely get default clinic ID, returns null if not configured
+ */
+export function getDefaultClinicIdOrNull(): string | null {
+  try {
+    return getDefaultClinicId()
+  } catch {
+    return null
+  }
 }

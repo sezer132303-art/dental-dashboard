@@ -2,8 +2,26 @@ import { supabase, createServerSupabaseClient } from './supabase'
 import { User } from '@/types'
 import bcrypt from 'bcryptjs'
 
-const N8N_WEBHOOK_URL = process.env.N8N_WEBHOOK_URL || 'https://mwqopo2p.rpcld.net/webhook'
-const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
+// Get required environment variables (no hardcoded fallbacks for production URLs)
+function getN8nWebhookUrl(): string {
+  const url = process.env.N8N_WEBHOOK_URL
+  if (!url) {
+    throw new Error('N8N_WEBHOOK_URL environment variable is not set')
+  }
+  return url
+}
+
+function getAppUrl(): string {
+  const url = process.env.NEXT_PUBLIC_APP_URL
+  if (!url) {
+    // Only allow localhost fallback in development
+    if (process.env.NODE_ENV === 'development') {
+      return 'http://localhost:3000'
+    }
+    throw new Error('NEXT_PUBLIC_APP_URL environment variable is not set')
+  }
+  return url
+}
 
 // Login with phone and password
 export async function loginWithPassword(phone: string, password: string): Promise<{ user: User | null; sessionToken: string | null; error?: string }> {
@@ -105,9 +123,9 @@ export async function sendMagicLink(phone: string): Promise<{ success: boolean; 
     }
 
     // Send WhatsApp message via n8n webhook
-    const magicLink = `${APP_URL}/auth/verify?token=${token}`
+    const magicLink = `${getAppUrl()}/auth/verify?token=${token}`
 
-    const response = await fetch(`${N8N_WEBHOOK_URL}/send-magic-link`, {
+    const response = await fetch(`${getN8nWebhookUrl()}/send-magic-link`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({

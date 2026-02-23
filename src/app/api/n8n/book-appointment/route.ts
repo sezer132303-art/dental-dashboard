@@ -2,6 +2,24 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase'
 import { validateApiKey, getDefaultClinicId } from '@/lib/api-auth'
 
+// Validation helpers
+const DATE_REGEX = /^\d{4}-\d{2}-\d{2}$/
+const TIME_REGEX = /^\d{2}:\d{2}$/
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+const PHONE_REGEX = /^[\d\s\-+()]{7,20}$/
+
+function validateDate(date: string): boolean {
+  if (!DATE_REGEX.test(date)) return false
+  const parsed = new Date(date)
+  return !isNaN(parsed.getTime())
+}
+
+function validateTime(time: string): boolean {
+  if (!TIME_REGEX.test(time)) return false
+  const [hours, minutes] = time.split(':').map(Number)
+  return hours >= 0 && hours <= 23 && minutes >= 0 && minutes <= 59
+}
+
 // POST /api/n8n/book-appointment
 export async function POST(request: NextRequest) {
   const validation = await validateApiKey(request)
@@ -26,12 +44,97 @@ export async function POST(request: NextRequest) {
       conversationId
     } = body
 
-    const effectiveClinicId = clinicId || getDefaultClinicId()
+    // Get clinic ID (throws if not configured)
+    let effectiveClinicId: string
+    try {
+      effectiveClinicId = clinicId || getDefaultClinicId()
+    } catch (error) {
+      console.error('Clinic ID error:', error)
+      return NextResponse.json(
+        { error: 'Clinic ID не е конфигуриран' },
+        { status: 500 }
+      )
+    }
 
     // Validate required fields
     if (!doctorId || !patientPhone || !appointmentDate || !startTime) {
       return NextResponse.json(
         { error: 'Липсват задължителни полета: doctorId, patientPhone, appointmentDate, startTime' },
+        { status: 400 }
+      )
+    }
+
+    // Validate UUID format for doctorId
+    if (!UUID_REGEX.test(doctorId)) {
+      return NextResponse.json(
+        { error: 'Невалиден формат на doctorId (трябва да е UUID)' },
+        { status: 400 }
+      )
+    }
+
+    // Validate phone format
+    if (!PHONE_REGEX.test(patientPhone)) {
+      return NextResponse.json(
+        { error: 'Невалиден формат на телефонен номер' },
+        { status: 400 }
+      )
+    }
+
+    // Validate date format (YYYY-MM-DD)
+    if (!validateDate(appointmentDate)) {
+      return NextResponse.json(
+        { error: 'Невалиден формат на дата (трябва да е YYYY-MM-DD)' },
+        { status: 400 }
+      )
+    }
+
+    // Validate time format (HH:MM)
+    if (!validateTime(startTime)) {
+      return NextResponse.json(
+        { error: 'Невалиден формат на начален час (трябва да е HH:MM)' },
+        { status: 400 }
+      )
+    }
+
+    if (endTime && !validateTime(endTime)) {
+      return NextResponse.json(
+        { error: 'Невалиден формат на краен час (трябва да е HH:MM)' },
+        { status: 400 }
+      )
+    }
+
+    // Verify clinic exists
+    const { data: clinic, error: clinicError } = await supabase
+      .from('clinics')
+      .select('id')
+      .eq('id', effectiveClinicId)
+      .single()
+
+    if (clinicError || !clinic) {
+      return NextResponse.json(
+        { error: 'Клиниката не е намерена' },
+        { status: 404 }
+      )
+    }
+
+    // Verify doctor exists and belongs to clinic
+    const { data: doctor, error: doctorError } = await supabase
+      .from('doctors')
+      .select('id, name, is_active')
+      .eq('id', doctorId)
+      .eq('clinic_id', effectiveClinicId)
+      .single()
+
+    if (doctorError || !doctor) {
+      return NextResponse.json(
+        { error: 'Докторът не е намерен в тази клиника' },
+        { status: 404 }
+      )
+    }
+
+    if (!doctor.is_active) {
+      return NextResponse.json(
+        { error: 'Докторът не е активен' },
         { status: 400 }
       )
     }

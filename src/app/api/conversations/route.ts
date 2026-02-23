@@ -28,14 +28,20 @@ interface Message {
   sent_at: string
 }
 
+interface Patient {
+  id: string
+  name: string
+  phone: string
+}
+
 // GET /api/conversations - List conversations from all channels
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url)
     const limit = parseInt(searchParams.get('limit') || '50')
     const requestedClinicId = searchParams.get('clinicId')
-    const status = searchParams.get('status') // 'active', 'resolved', 'booking_complete'
-    const channel = searchParams.get('channel') as MessagingChannel | null // NEW: channel filter
+    const status = searchParams.get('status')
+    const channel = searchParams.get('channel') as MessagingChannel | null
 
     // Check authentication and get authorized clinic
     const { clinicId, isAdmin, error: authError } = await getAuthorizedClinicId(requestedClinicId)
@@ -44,21 +50,19 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: authError }, { status: 401 })
     }
 
-    // Non-admin users MUST have a clinic_id
     if (!isAdmin && !clinicId) {
       return NextResponse.json({ error: 'No clinic assigned' }, { status: 403 })
     }
 
     const supabase = createServerSupabaseClient()
 
-    // Try new unified table first, fall back to legacy
+    // Build conversation query
     let query = supabase
       .from('conversations')
       .select('*')
       .order('last_message_at', { ascending: false })
       .limit(limit)
 
-    // Always filter by clinic for non-admin users
     if (clinicId) {
       query = query.eq('clinic_id', clinicId)
     }
@@ -75,96 +79,136 @@ export async function GET(request: NextRequest) {
 
     if (convError) {
       console.error('Conversations error:', convError)
-      // If unified table doesn't exist, try legacy whatsapp_conversations
       if (convError.code === '42P01') {
         return await getLegacyConversations(request)
       }
       throw convError
     }
 
-    // Get messages and patient info for each conversation
-    const enrichedConversations = await Promise.all(
-      (conversations || []).map(async (conv: Conversation) => {
-        // Get messages for this conversation
-        const { data: messages } = await supabase
-          .from('messages')
-          .select('*')
-          .eq('conversation_id', conv.id)
-          .order('sent_at', { ascending: true })
+    if (!conversations || conversations.length === 0) {
+      return NextResponse.json({ conversations: [], channelStats: [] })
+    }
 
-        const chatMessages = (messages || []) as Message[]
+    // Get all conversation IDs
+    const conversationIds = conversations.map((c: Conversation) => c.id)
 
-        // Get patient info if patient_id exists
-        let patient = null
-        if (conv.patient_id) {
-          const { data: patientData } = await supabase
-            .from('patients')
-            .select('id, name, phone')
-            .eq('id', conv.patient_id)
-            .single()
+    // OPTIMIZED: Fetch all messages for all conversations in ONE query
+    const { data: allMessages } = await supabase
+      .from('messages')
+      .select('*')
+      .in('conversation_id', conversationIds)
+      .order('sent_at', { ascending: true })
 
-          if (patientData) {
-            patient = patientData
-          }
-        }
+    // Group messages by conversation_id
+    const messagesByConversation = new Map<string, Message[]>()
+    for (const msg of (allMessages || []) as Message[]) {
+      if (!messagesByConversation.has(msg.conversation_id)) {
+        messagesByConversation.set(msg.conversation_id, [])
+      }
+      messagesByConversation.get(msg.conversation_id)!.push(msg)
+    }
 
-        // If no patient_id but has phone, try to find by phone
-        if (!patient && conv.patient_phone) {
-          const { data: patientData } = await supabase
-            .from('patients')
-            .select('id, name, phone')
-            .eq('phone', conv.patient_phone)
-            .maybeSingle()
+    // Collect all patient IDs and phones for batch lookup
+    const patientIds = new Set<string>()
+    const patientPhones = new Set<string>()
 
-          if (patientData) {
-            patient = patientData
-          }
-        }
+    for (const conv of conversations as Conversation[]) {
+      if (conv.patient_id) {
+        patientIds.add(conv.patient_id)
+      }
+      if (conv.patient_phone) {
+        patientPhones.add(conv.patient_phone)
+      }
+    }
 
-        // Format messages
-        const formattedMessages = chatMessages.map(msg => ({
-          id: msg.id,
-          direction: msg.direction,
-          content: msg.content,
-          message_type: msg.message_type,
-          parsed_intent: msg.parsed_intent,
-          sent_at: msg.sent_at
-        }))
+    // OPTIMIZED: Fetch all patients in ONE query
+    const patientsById = new Map<string, Patient>()
+    const patientsByPhone = new Map<string, Patient>()
 
-        // Get last human message
-        const humanMessages = formattedMessages.filter(m => m.direction === 'inbound')
-        const lastHumanMessage = humanMessages[humanMessages.length - 1]
+    if (patientIds.size > 0) {
+      const { data: patientsData } = await supabase
+        .from('patients')
+        .select('id, name, phone')
+        .in('id', Array.from(patientIds))
 
-        // Calculate updated_at from last message
-        const lastMessage = formattedMessages[formattedMessages.length - 1]
-        const updatedAt = lastMessage?.sent_at || conv.last_message_at || conv.created_at
+      for (const p of (patientsData || []) as Patient[]) {
+        patientsById.set(p.id, p)
+        patientsByPhone.set(p.phone, p)
+      }
+    }
 
-        // Display name: patient name > stored name > phone > user id
-        const displayName = patient?.name || conv.patient_name || conv.patient_phone || conv.channel_user_id
-
-        return {
-          id: conv.id,
-          channel: conv.channel,
-          channel_user_id: conv.channel_user_id,
-          patient_phone: conv.patient_phone,
-          patient_id: conv.patient_id,
-          clinic_id: conv.clinic_id,
-          status: conv.status,
-          started_at: conv.created_at,
-          updated_at: updatedAt,
-          patient: patient || {
-            id: null,
-            name: displayName,
-            phone: conv.patient_phone || conv.channel_user_id
-          },
-          messagesCount: formattedMessages.length,
-          lastMessage: lastHumanMessage || lastMessage,
-          recentMessages: formattedMessages.slice(-10).reverse()
-        }
-      })
+    // Also look up patients by phone (for conversations without patient_id)
+    const phonesWithoutPatient = Array.from(patientPhones).filter(
+      phone => !Array.from(patientsByPhone.values()).some(p => p.phone === phone)
     )
 
-    // Get channel statistics
+    if (phonesWithoutPatient.length > 0) {
+      const { data: patientsData } = await supabase
+        .from('patients')
+        .select('id, name, phone')
+        .in('phone', phonesWithoutPatient)
+
+      for (const p of (patientsData || []) as Patient[]) {
+        patientsById.set(p.id, p)
+        patientsByPhone.set(p.phone, p)
+      }
+    }
+
+    // Enrich conversations (no additional queries needed!)
+    const enrichedConversations = (conversations as Conversation[]).map(conv => {
+      const messages = messagesByConversation.get(conv.id) || []
+
+      // Get patient from cache
+      let patient: Patient | null = null
+      if (conv.patient_id && patientsById.has(conv.patient_id)) {
+        patient = patientsById.get(conv.patient_id)!
+      } else if (conv.patient_phone && patientsByPhone.has(conv.patient_phone)) {
+        patient = patientsByPhone.get(conv.patient_phone)!
+      }
+
+      // Format messages
+      const formattedMessages = messages.map(msg => ({
+        id: msg.id,
+        direction: msg.direction,
+        content: msg.content,
+        message_type: msg.message_type,
+        parsed_intent: msg.parsed_intent,
+        sent_at: msg.sent_at
+      }))
+
+      // Get last human message
+      const humanMessages = formattedMessages.filter(m => m.direction === 'inbound')
+      const lastHumanMessage = humanMessages[humanMessages.length - 1]
+
+      // Calculate updated_at from last message
+      const lastMessage = formattedMessages[formattedMessages.length - 1]
+      const updatedAt = lastMessage?.sent_at || conv.last_message_at || conv.created_at
+
+      // Display name: patient name > stored name > phone > user id
+      const displayName = patient?.name || conv.patient_name || conv.patient_phone || conv.channel_user_id
+
+      return {
+        id: conv.id,
+        channel: conv.channel,
+        channel_user_id: conv.channel_user_id,
+        patient_phone: conv.patient_phone,
+        patient_id: conv.patient_id,
+        clinic_id: conv.clinic_id,
+        status: conv.status,
+        started_at: conv.created_at,
+        updated_at: updatedAt,
+        patient: patient || {
+          id: null,
+          name: displayName,
+          phone: conv.patient_phone || conv.channel_user_id
+        },
+        messagesCount: formattedMessages.length,
+        lastMessage: lastHumanMessage || lastMessage,
+        recentMessages: formattedMessages.slice(-10).reverse()
+      }
+    })
+
+    // Get channel statistics (optional, single query)
     const { data: channelStats } = await supabase
       .from('conversation_stats')
       .select('*')
@@ -180,7 +224,7 @@ export async function GET(request: NextRequest) {
   }
 }
 
-// Legacy support for whatsapp_conversations table
+// Legacy support for whatsapp_conversations table (also optimized)
 async function getLegacyConversations(request: NextRequest) {
   const supabase = createServerSupabaseClient()
   const { searchParams } = new URL(request.url)
@@ -211,65 +255,118 @@ async function getLegacyConversations(request: NextRequest) {
     throw error
   }
 
-  const enrichedConversations = await Promise.all(
-    (conversations || []).map(async (conv) => {
-      const { data: messages } = await supabase
-        .from('whatsapp_messages')
-        .select('*')
-        .eq('conversation_id', conv.id)
-        .order('sent_at', { ascending: true })
+  if (!conversations || conversations.length === 0) {
+    return NextResponse.json({ conversations: [] })
+  }
 
-      let patient = null
-      if (conv.patient_id) {
-        const { data: patientData } = await supabase
-          .from('patients')
-          .select('id, name, phone')
-          .eq('id', conv.patient_id)
-          .single()
-        patient = patientData
-      }
+  // Get all conversation IDs
+  const conversationIds = conversations.map((c: { id: string }) => c.id)
 
-      if (!patient && conv.patient_phone) {
-        const { data: patientData } = await supabase
-          .from('patients')
-          .select('id, name, phone')
-          .eq('phone', conv.patient_phone)
-          .maybeSingle()
-        patient = patientData
-      }
+  // OPTIMIZED: Fetch all messages in ONE query
+  const { data: allMessages } = await supabase
+    .from('whatsapp_messages')
+    .select('*')
+    .in('conversation_id', conversationIds)
+    .order('sent_at', { ascending: true })
 
-      const chatMessages = messages || []
-      const formattedMessages = chatMessages.map((msg: Message) => ({
-        id: msg.id,
-        direction: msg.direction,
-        content: msg.content,
-        parsed_intent: msg.parsed_intent,
-        sent_at: msg.sent_at
-      }))
+  // Group messages by conversation_id
+  const messagesByConversation = new Map<string, Message[]>()
+  for (const msg of (allMessages || []) as Message[]) {
+    if (!messagesByConversation.has(msg.conversation_id)) {
+      messagesByConversation.set(msg.conversation_id, [])
+    }
+    messagesByConversation.get(msg.conversation_id)!.push(msg)
+  }
 
-      const lastMessage = formattedMessages[formattedMessages.length - 1]
+  // Collect all patient IDs and phones
+  const patientIds = new Set<string>()
+  const patientPhones = new Set<string>()
 
-      return {
-        id: conv.id,
-        channel: 'whatsapp' as MessagingChannel,
-        channel_user_id: conv.patient_phone,
-        patient_phone: conv.patient_phone,
-        patient_id: conv.patient_id,
-        clinic_id: conv.clinic_id,
-        status: conv.status,
-        started_at: conv.started_at,
-        updated_at: lastMessage?.sent_at || conv.started_at,
-        patient: patient || {
-          id: null,
-          name: conv.patient_phone,
-          phone: conv.patient_phone
-        },
-        messagesCount: formattedMessages.length,
-        lastMessage,
-        recentMessages: formattedMessages.slice(-10).reverse()
-      }
-    })
+  for (const conv of conversations) {
+    if (conv.patient_id) patientIds.add(conv.patient_id)
+    if (conv.patient_phone) patientPhones.add(conv.patient_phone)
+  }
+
+  // OPTIMIZED: Fetch all patients in ONE query
+  const patientsById = new Map<string, Patient>()
+  const patientsByPhone = new Map<string, Patient>()
+
+  if (patientIds.size > 0) {
+    const { data: patientsData } = await supabase
+      .from('patients')
+      .select('id, name, phone')
+      .in('id', Array.from(patientIds))
+
+    for (const p of (patientsData || []) as Patient[]) {
+      patientsById.set(p.id, p)
+      patientsByPhone.set(p.phone, p)
+    }
+  }
+
+  const phonesWithoutPatient = Array.from(patientPhones).filter(
+    phone => !Array.from(patientsByPhone.values()).some(p => p.phone === phone)
   )
+
+  if (phonesWithoutPatient.length > 0) {
+    const { data: patientsData } = await supabase
+      .from('patients')
+      .select('id, name, phone')
+      .in('phone', phonesWithoutPatient)
+
+    for (const p of (patientsData || []) as Patient[]) {
+      patientsById.set(p.id, p)
+      patientsByPhone.set(p.phone, p)
+    }
+  }
+
+  // Enrich conversations
+  const enrichedConversations = conversations.map((conv: {
+    id: string
+    patient_phone: string
+    patient_id: string | null
+    clinic_id: string
+    status: string
+    started_at: string
+  }) => {
+    const messages = messagesByConversation.get(conv.id) || []
+
+    let patient: Patient | null = null
+    if (conv.patient_id && patientsById.has(conv.patient_id)) {
+      patient = patientsById.get(conv.patient_id)!
+    } else if (conv.patient_phone && patientsByPhone.has(conv.patient_phone)) {
+      patient = patientsByPhone.get(conv.patient_phone)!
+    }
+
+    const formattedMessages = messages.map((msg: Message) => ({
+      id: msg.id,
+      direction: msg.direction,
+      content: msg.content,
+      parsed_intent: msg.parsed_intent,
+      sent_at: msg.sent_at
+    }))
+
+    const lastMessage = formattedMessages[formattedMessages.length - 1]
+
+    return {
+      id: conv.id,
+      channel: 'whatsapp' as MessagingChannel,
+      channel_user_id: conv.patient_phone,
+      patient_phone: conv.patient_phone,
+      patient_id: conv.patient_id,
+      clinic_id: conv.clinic_id,
+      status: conv.status,
+      started_at: conv.started_at,
+      updated_at: lastMessage?.sent_at || conv.started_at,
+      patient: patient || {
+        id: null,
+        name: conv.patient_phone,
+        phone: conv.patient_phone
+      },
+      messagesCount: formattedMessages.length,
+      lastMessage,
+      recentMessages: formattedMessages.slice(-10).reverse()
+    }
+  })
 
   return NextResponse.json({ conversations: enrichedConversations })
 }
@@ -277,7 +374,6 @@ async function getLegacyConversations(request: NextRequest) {
 // POST /api/conversations - Actions on conversations
 export async function POST(request: NextRequest) {
   try {
-    // Check authentication
     const { clinicId, isAdmin, error: authError } = await getAuthorizedClinicId()
 
     if (authError) {
@@ -310,7 +406,6 @@ export async function POST(request: NextRequest) {
     }
 
     if (action === 'resolve') {
-      // Try unified table first
       let { error } = await supabase
         .from('conversations')
         .update({
@@ -319,7 +414,6 @@ export async function POST(request: NextRequest) {
         })
         .eq('id', conversationId)
 
-      // If unified table doesn't exist, try legacy
       if (error?.code === '42P01') {
         const result = await supabase
           .from('whatsapp_conversations')
@@ -343,7 +437,6 @@ export async function POST(request: NextRequest) {
     }
 
     if (action === 'reopen') {
-      // Try unified table first
       let { error } = await supabase
         .from('conversations')
         .update({
@@ -352,7 +445,6 @@ export async function POST(request: NextRequest) {
         })
         .eq('id', conversationId)
 
-      // If unified table doesn't exist, try legacy
       if (error?.code === '42P01') {
         const result = await supabase
           .from('whatsapp_conversations')
