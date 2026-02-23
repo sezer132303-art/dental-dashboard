@@ -85,7 +85,16 @@ export async function GET(request: NextRequest) {
       throw convError
     }
 
+    // If new table is empty, try legacy table (migration might not have run yet)
     if (!conversations || conversations.length === 0) {
+      const legacyResult = await getLegacyConversations(request)
+      const legacyData = await legacyResult.json()
+
+      // If legacy has data, return it
+      if (legacyData.conversations && legacyData.conversations.length > 0) {
+        return NextResponse.json(legacyData)
+      }
+
       return NextResponse.json({ conversations: [], channelStats: [] })
     }
 
