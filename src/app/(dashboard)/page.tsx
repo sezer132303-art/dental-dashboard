@@ -134,6 +134,24 @@ export default function DashboardPage() {
     )
   }
 
+  // Calculate week dates
+  const today = new Date()
+  const dayOfWeek = today.getDay()
+  const mondayOffset = dayOfWeek === 0 ? -6 : 1 - dayOfWeek
+  const startOfWeek = new Date(today)
+  startOfWeek.setDate(today.getDate() + mondayOffset)
+  const endOfWeek = new Date(startOfWeek)
+  endOfWeek.setDate(startOfWeek.getDate() + 6)
+
+  const formatShortDate = (date: Date) => {
+    const day = date.getDate().toString().padStart(2, '0')
+    const month = (date.getMonth() + 1).toString().padStart(2, '0')
+    return `${day}.${month}`
+  }
+
+  const weekRange = `${formatShortDate(startOfWeek)} - ${formatShortDate(endOfWeek)}`
+  const todayFormatted = formatShortDate(today)
+
   // Prepare data for charts
   const doctorChartData = metrics.doctors.map(d => ({
     name: d.name.replace('д-р ', ''),
@@ -187,7 +205,7 @@ export default function DashboardPage() {
       {/* Today's Stats per Doctor */}
       <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
         <h3 className="text-lg font-semibold text-gray-900 mb-4">
-          Днес по лекари
+          Днес по лекари <span className="text-gray-400 font-normal">({todayFormatted})</span>
         </h3>
         {metrics.doctors.length > 0 ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
@@ -237,7 +255,7 @@ export default function DashboardPage() {
       {/* Charts */}
       <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
         <h3 className="text-lg font-semibold text-gray-900 mb-4">
-          Часове по лекари (тази седмица)
+          Часове по лекари - тази седмица <span className="text-gray-400 font-normal">({weekRange})</span>
         </h3>
         {doctorChartData.length > 0 ? (
           <ResponsiveContainer width="100%" height={300}>
@@ -270,7 +288,7 @@ export default function DashboardPage() {
       <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
         <div className="px-6 py-4 border-b border-gray-100">
           <h3 className="text-lg font-semibold text-gray-900">
-            Статистика по лекари (тази седмица)
+            Статистика по лекари - тази седмица <span className="text-gray-400 font-normal">({weekRange})</span>
           </h3>
         </div>
         {metrics.doctors.length > 0 ? (
