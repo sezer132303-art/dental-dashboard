@@ -102,9 +102,10 @@ export async function GET(request: NextRequest) {
 
     const { data: doctors } = await doctorsQuery
 
-    // Get appointments per doctor this week
+    // Get appointments per doctor this week AND today
     const doctorStats = await Promise.all(
       (doctors || []).map(async (doctor) => {
+        // This week's appointments
         const { data: doctorAppointments } = await supabase
           .from('appointments')
           .select('id, status')
@@ -112,16 +113,31 @@ export async function GET(request: NextRequest) {
           .gte('appointment_date', formatDate(startOfWeek))
           .lte('appointment_date', formatDate(endOfWeek))
 
+        // Today's appointments
+        const { data: todayDoctorAppointments } = await supabase
+          .from('appointments')
+          .select('id, status')
+          .eq('doctor_id', doctor.id)
+          .eq('appointment_date', formatDate(today))
+
         const total = doctorAppointments?.length || 0
         const completed = doctorAppointments?.filter(a => a.status === 'completed').length || 0
         const noShow = doctorAppointments?.filter(a => a.status === 'no_show').length || 0
+
+        const todayTotal = todayDoctorAppointments?.length || 0
+        const todayCompleted = todayDoctorAppointments?.filter(a => a.status === 'completed').length || 0
+        const todayNoShow = todayDoctorAppointments?.filter(a => a.status === 'no_show').length || 0
 
         return {
           ...doctor,
           patientsThisWeek: total,
           completed,
           noShow,
-          attendanceRate: total > 0 ? ((completed / (completed + noShow)) * 100) || 0 : 0
+          attendanceRate: total > 0 ? ((completed / (completed + noShow)) * 100) || 0 : 0,
+          // Today stats
+          appointmentsToday: todayTotal,
+          completedToday: todayCompleted,
+          noShowToday: todayNoShow
         }
       })
     )

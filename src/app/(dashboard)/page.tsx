@@ -32,6 +32,10 @@ interface DoctorStats {
   completed: number
   noShow: number
   attendanceRate: number
+  // Today stats
+  appointmentsToday: number
+  completedToday: number
+  noShowToday: number
 }
 
 interface Metrics {
@@ -178,6 +182,56 @@ export default function DashboardPage() {
           icon={AlertTriangle}
           iconBg="bg-red-500"
         />
+      </div>
+
+      {/* Today's Stats per Doctor */}
+      <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
+        <h3 className="text-lg font-semibold text-gray-900 mb-4">
+          Днес по лекари
+        </h3>
+        {metrics.doctors.length > 0 ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+            {metrics.doctors.map((doctor) => (
+              <div
+                key={doctor.id}
+                className="bg-gray-50 rounded-lg p-4 border border-gray-100"
+              >
+                <div className="flex items-center gap-3 mb-3">
+                  <div
+                    className={cn(
+                      'w-10 h-10 rounded-full flex items-center justify-center text-white font-bold',
+                      doctor.color || 'bg-blue-500'
+                    )}
+                  >
+                    {doctor.name.split(' ')[1]?.charAt(0) || doctor.name.charAt(0)}
+                  </div>
+                  <div>
+                    <p className="font-medium text-gray-900">{doctor.name}</p>
+                    <p className="text-xs text-gray-500">{doctor.specialty || 'Общ стоматолог'}</p>
+                  </div>
+                </div>
+                <div className="grid grid-cols-3 gap-2 text-center">
+                  <div className="bg-white rounded-lg p-2">
+                    <p className="text-lg font-bold text-blue-600">{doctor.appointmentsToday}</p>
+                    <p className="text-xs text-gray-500">Часове</p>
+                  </div>
+                  <div className="bg-white rounded-lg p-2">
+                    <p className="text-lg font-bold text-green-600">{doctor.completedToday}</p>
+                    <p className="text-xs text-gray-500">Завършени</p>
+                  </div>
+                  <div className="bg-white rounded-lg p-2">
+                    <p className="text-lg font-bold text-red-600">{doctor.noShowToday}</p>
+                    <p className="text-xs text-gray-500">Неявявания</p>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="text-center text-gray-400 py-8">
+            Няма добавени лекари
+          </div>
+        )}
       </div>
 
       {/* Charts */}
