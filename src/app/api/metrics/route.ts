@@ -25,7 +25,9 @@ export async function GET(request: NextRequest) {
     // Get current date info
     const today = new Date()
     const startOfWeek = new Date(today)
-    startOfWeek.setDate(today.getDate() - today.getDay() + 1) // Monday
+    const dayOfWeek = today.getDay()
+    const mondayOffset = dayOfWeek === 0 ? -6 : 1 - dayOfWeek
+    startOfWeek.setDate(today.getDate() + mondayOffset) // Monday
     const endOfWeek = new Date(startOfWeek)
     endOfWeek.setDate(startOfWeek.getDate() + 6) // Sunday
 
@@ -33,6 +35,10 @@ export async function GET(request: NextRequest) {
     startOfLastWeek.setDate(startOfLastWeek.getDate() - 7)
     const endOfLastWeek = new Date(startOfWeek)
     endOfLastWeek.setDate(endOfLastWeek.getDate() - 1)
+
+    // Month dates (1st to last day of current month)
+    const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1)
+    const endOfMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0)
 
     // Format dates
     const formatDate = (d: Date) => d.toISOString().split('T')[0]
@@ -102,7 +108,7 @@ export async function GET(request: NextRequest) {
 
     const { data: doctors } = await doctorsQuery
 
-    // Get appointments per doctor this week AND today
+    // Get appointments per doctor this week, today, AND month
     const doctorStats = await Promise.all(
       (doctors || []).map(async (doctor) => {
         // This week's appointments
@@ -120,6 +126,14 @@ export async function GET(request: NextRequest) {
           .eq('doctor_id', doctor.id)
           .eq('appointment_date', formatDate(today))
 
+        // This month's appointments
+        const { data: monthDoctorAppointments } = await supabase
+          .from('appointments')
+          .select('id, status')
+          .eq('doctor_id', doctor.id)
+          .gte('appointment_date', formatDate(startOfMonth))
+          .lte('appointment_date', formatDate(endOfMonth))
+
         const total = doctorAppointments?.length || 0
         const completed = doctorAppointments?.filter(a => a.status === 'completed').length || 0
         const noShow = doctorAppointments?.filter(a => a.status === 'no_show').length || 0
@@ -127,6 +141,10 @@ export async function GET(request: NextRequest) {
         const todayTotal = todayDoctorAppointments?.length || 0
         const todayCompleted = todayDoctorAppointments?.filter(a => a.status === 'completed').length || 0
         const todayNoShow = todayDoctorAppointments?.filter(a => a.status === 'no_show').length || 0
+
+        const monthTotal = monthDoctorAppointments?.length || 0
+        const monthCompleted = monthDoctorAppointments?.filter(a => a.status === 'completed').length || 0
+        const monthNoShow = monthDoctorAppointments?.filter(a => a.status === 'no_show').length || 0
 
         return {
           ...doctor,
@@ -137,7 +155,11 @@ export async function GET(request: NextRequest) {
           // Today stats
           appointmentsToday: todayTotal,
           completedToday: todayCompleted,
-          noShowToday: todayNoShow
+          noShowToday: todayNoShow,
+          // Month stats
+          appointmentsThisMonth: monthTotal,
+          completedThisMonth: monthCompleted,
+          noShowThisMonth: monthNoShow
         }
       })
     )

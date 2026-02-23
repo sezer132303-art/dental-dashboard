@@ -36,6 +36,10 @@ interface DoctorStats {
   appointmentsToday: number
   completedToday: number
   noShowToday: number
+  // Month stats
+  appointmentsThisMonth: number
+  completedThisMonth: number
+  noShowThisMonth: number
 }
 
 interface Metrics {
@@ -134,7 +138,7 @@ export default function DashboardPage() {
     )
   }
 
-  // Calculate week dates
+  // Calculate week and month dates
   const today = new Date()
   const dayOfWeek = today.getDay()
   const mondayOffset = dayOfWeek === 0 ? -6 : 1 - dayOfWeek
@@ -142,6 +146,12 @@ export default function DashboardPage() {
   startOfWeek.setDate(today.getDate() + mondayOffset)
   const endOfWeek = new Date(startOfWeek)
   endOfWeek.setDate(startOfWeek.getDate() + 6)
+
+  // Month name in Bulgarian
+  const monthNames = ['Януари', 'Февруари', 'Март', 'Април', 'Май', 'Юни',
+                      'Юли', 'Август', 'Септември', 'Октомври', 'Ноември', 'Декември']
+  const currentMonth = monthNames[today.getMonth()]
+  const currentYear = today.getFullYear()
 
   const formatShortDate = (date: Date) => {
     const day = date.getDate().toString().padStart(2, '0')
@@ -152,14 +162,20 @@ export default function DashboardPage() {
   const weekRange = `${formatShortDate(startOfWeek)} - ${formatShortDate(endOfWeek)}`
   const todayFormatted = formatShortDate(today)
 
-  // Prepare data for charts
+  // Prepare data for charts - using MONTHLY data
   const doctorChartData = metrics.doctors.map(d => ({
     name: d.name.replace('д-р ', ''),
-    appointments: d.patientsThisWeek
+    appointments: d.appointmentsThisMonth || 0
   }))
 
   return (
     <div className="space-y-6">
+      {/* This Week Section Header */}
+      <div className="bg-gradient-to-r from-blue-600 to-purple-600 rounded-xl p-6 text-white">
+        <h2 className="text-2xl font-bold mb-1">Тази седмица</h2>
+        <p className="text-blue-100">{weekRange}</p>
+      </div>
+
       {/* KPI Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
         <KpiCard
@@ -252,10 +268,10 @@ export default function DashboardPage() {
         )}
       </div>
 
-      {/* Charts */}
+      {/* Charts - Monthly */}
       <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
         <h3 className="text-lg font-semibold text-gray-900 mb-4">
-          Часове по лекари - тази седмица <span className="text-gray-400 font-normal">({weekRange})</span>
+          Часове по лекари - {currentMonth} {currentYear}
         </h3>
         {doctorChartData.length > 0 ? (
           <ResponsiveContainer width="100%" height={300}>
