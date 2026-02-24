@@ -87,15 +87,16 @@ export async function POST(request: NextRequest) {
       for (const chat of chats.slice(0, 50)) { // Limit to 50 most recent chats
         try {
           // Extract phone number from remoteJid or lastMessage
-          let remoteJid = chat.remoteJid || ''
-          if (remoteJid.includes('@g.us')) continue // Skip groups
+          const originalRemoteJid = chat.remoteJid || ''
+          if (originalRemoteJid.includes('@g.us')) continue // Skip groups
 
-          // Handle @lid addresses - get actual phone from remoteJidAlt
-          if (remoteJid.includes('@lid') && chat.lastMessage?.key?.remoteJidAlt) {
-            remoteJid = chat.lastMessage.key.remoteJidAlt
+          // For @lid addresses, get actual phone from remoteJidAlt but keep original for findMessages
+          let phoneJid = originalRemoteJid
+          if (originalRemoteJid.includes('@lid') && chat.lastMessage?.key?.remoteJidAlt) {
+            phoneJid = chat.lastMessage.key.remoteJidAlt
           }
 
-          const phone = remoteJid.replace('@s.whatsapp.net', '').replace(/\D/g, '')
+          const phone = phoneJid.replace('@s.whatsapp.net', '').replace(/\D/g, '')
           if (!phone || phone.length < 10) continue
 
           // Skip test numbers
@@ -144,7 +145,7 @@ export async function POST(request: NextRequest) {
 
           totalConversations++
 
-          // Fetch messages for this chat
+          // Fetch messages for this chat (use originalRemoteJid for @lid chats)
           const messagesResponse = await fetch(
             `${EVOLUTION_API_URL}/chat/findMessages/${EVOLUTION_INSTANCE}`,
             {
@@ -156,7 +157,7 @@ export async function POST(request: NextRequest) {
               body: JSON.stringify({
                 where: {
                   key: {
-                    remoteJid: remoteJid
+                    remoteJid: originalRemoteJid
                   }
                 },
                 limit: 100 // Last 100 messages per chat
