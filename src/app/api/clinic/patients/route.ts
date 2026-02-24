@@ -19,17 +19,47 @@ export async function GET() {
 
     // Get patients from the patients table
     // Include patients where is_active is true OR is_active is null (for imported/synced patients)
-    const { data: patients, error } = await supabase
+    const { data: rawPatients, error } = await supabase
       .from('patients')
       .select('*')
       .eq('clinic_id', clinicId)
       .or('is_active.eq.true,is_active.is.null')
-      .order('created_at', { ascending: false })
+      .order('updated_at', { ascending: false })
 
     if (error) {
       console.error('Patients fetch error:', error)
       return NextResponse.json({ error: 'Failed to fetch patients' }, { status: 500 })
     }
+
+    // Deduplicate patients by phone number
+    // Keep the most complete/recent record for each phone
+    const patientsByPhone = new Map<string, typeof rawPatients[0]>()
+    for (const patient of rawPatients || []) {
+      const phone = patient.phone
+      if (!phone) continue
+
+      const existing = patientsByPhone.get(phone)
+      if (!existing) {
+        patientsByPhone.set(phone, patient)
+      } else {
+        // Prefer patient with a real name over generic names
+        const existingHasName = existing.name && existing.name !== 'WhatsApp пациент' && existing.name !== phone
+        const currentHasName = patient.name && patient.name !== 'WhatsApp пациент' && patient.name !== phone
+
+        if (currentHasName && !existingHasName) {
+          patientsByPhone.set(phone, patient)
+        } else if (currentHasName === existingHasName) {
+          // If both have names (or both don't), prefer the most recently updated
+          const existingDate = new Date(existing.updated_at || existing.created_at)
+          const currentDate = new Date(patient.updated_at || patient.created_at)
+          if (currentDate > existingDate) {
+            patientsByPhone.set(phone, patient)
+          }
+        }
+      }
+    }
+
+    const patients = Array.from(patientsByPhone.values())
 
     // Get appointment stats for each patient
     const { data: appointments } = await supabase
