@@ -12,7 +12,8 @@ import {
   RefreshCw,
   Loader2,
   X,
-  Filter
+  Filter,
+  Search
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import ChannelBadge from '@/components/ChannelBadge'
@@ -90,6 +91,9 @@ export default function ConversationsPage() {
   const [selectedConversation, setSelectedConversation] = useState<Conversation | null>(null)
   const [statusFilter, setStatusFilter] = useState<string>('all')
   const [channelFilter, setChannelFilter] = useState<string>('all')
+  const [search, setSearch] = useState('')
+  const [syncing, setSyncing] = useState(false)
+  const [syncMessage, setSyncMessage] = useState<{ text: string; success: boolean } | null>(null)
 
   useEffect(() => {
     fetchConversations()
@@ -119,6 +123,32 @@ export default function ConversationsPage() {
       console.error('Error fetching conversations:', error)
     } finally {
       setLoading(false)
+    }
+  }
+
+  async function syncWhatsApp() {
+    setSyncing(true)
+    setSyncMessage(null)
+    try {
+      const response = await fetch('/api/admin/sync-evolution', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer cleanup-demo-2026'
+        },
+        body: JSON.stringify({})
+      })
+      const data = await response.json()
+      if (response.ok) {
+        setSyncMessage({ text: data.message, success: true })
+        fetchConversations()
+      } else {
+        setSyncMessage({ text: data.error || 'Грешка при синхронизация', success: false })
+      }
+    } catch (error) {
+      setSyncMessage({ text: 'Грешка при свързване', success: false })
+    } finally {
+      setSyncing(false)
     }
   }
 
@@ -178,6 +208,18 @@ export default function ConversationsPage() {
     return acc
   }, {} as Record<string, number>)
 
+  // Filter conversations by search
+  const filteredConversations = conversations.filter(conv => {
+    if (!search) return true
+    const searchLower = search.toLowerCase()
+    const normalizedSearch = search.replace(/[\s\-\+]/g, '')
+    return (
+      conv.patient?.name?.toLowerCase().includes(searchLower) ||
+      conv.patient_phone?.includes(normalizedSearch) ||
+      conv.patient_phone?.includes(search)
+    )
+  })
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -186,13 +228,50 @@ export default function ConversationsPage() {
           <h1 className="text-2xl font-bold text-gray-900">Разговори</h1>
           <p className="text-gray-600">Следене на съобщения от всички канали</p>
         </div>
-        <button
-          onClick={() => fetchConversations()}
-          className="flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
-        >
-          <RefreshCw className="w-4 h-4" />
-          Обнови
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={syncWhatsApp}
+            disabled={syncing}
+            className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 transition"
+          >
+            <RefreshCw className={`w-4 h-4 ${syncing ? 'animate-spin' : ''}`} />
+            {syncing ? 'Синхронизиране...' : 'Синхронизирай WhatsApp'}
+          </button>
+          <button
+            onClick={() => fetchConversations()}
+            className="flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
+          >
+            <RefreshCw className="w-4 h-4" />
+            Обнови
+          </button>
+        </div>
+      </div>
+
+      {/* Sync message */}
+      {syncMessage && (
+        <div className={cn(
+          'p-4 rounded-lg flex items-center justify-between',
+          syncMessage.success ? 'bg-green-50 text-green-800' : 'bg-red-50 text-red-800'
+        )}>
+          <span>{syncMessage.text}</span>
+          <button onClick={() => setSyncMessage(null)}>
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
+
+      {/* Search Bar */}
+      <div className="bg-white rounded-xl shadow-sm p-4">
+        <div className="relative max-w-md">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+          <input
+            type="text"
+            placeholder="Търсене по име или телефон..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="w-full pl-10 pr-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900"
+          />
+        </div>
       </div>
 
       {/* Stats */}
@@ -305,13 +384,21 @@ export default function ConversationsPage() {
 
       {/* Conversations List */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-100 divide-y">
-        {conversations.length === 0 ? (
+        {filteredConversations.length === 0 ? (
           <div className="p-8 text-center">
             <MessageCircle className="w-12 h-12 text-gray-300 mx-auto mb-4" />
             <p className="text-gray-500">Няма намерени разговори</p>
+            {conversations.length === 0 && (
+              <button
+                onClick={syncWhatsApp}
+                className="mt-4 text-green-600 hover:text-green-700 text-sm font-medium"
+              >
+                Синхронизирай с Evolution API
+              </button>
+            )}
           </div>
         ) : (
-          conversations.map((conversation) => (
+          filteredConversations.map((conversation) => (
             <div
               key={conversation.id}
               onClick={() => setSelectedConversation(conversation)}

@@ -34,7 +34,13 @@ export async function GET(request: NextRequest) {
     }
 
     if (search) {
-      query = query.or(`name.ilike.%${search}%,phone.ilike.%${search}%`)
+      // Normalize phone search - remove spaces, +, - and convert 0 prefix to 359
+      let normalizedSearch = search.replace(/[\s\-\+]/g, '')
+      if (normalizedSearch.startsWith('0') && normalizedSearch.length >= 2) {
+        normalizedSearch = '359' + normalizedSearch.slice(1)
+      }
+      // Search by both original query and normalized phone
+      query = query.or(`name.ilike.%${search}%,phone.ilike.%${normalizedSearch}%,phone.ilike.%${search}%`)
     }
 
     const { data: rawPatients, error } = await query

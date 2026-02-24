@@ -11,7 +11,8 @@ import {
   Loader2,
   X,
   Filter,
-  Building2
+  Building2,
+  Search
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import ChannelBadge from '@/components/ChannelBadge'
@@ -89,6 +90,7 @@ export default function AdminConversationsPage() {
   const [clinicFilter, setClinicFilter] = useState<string>('all')
   const [syncing, setSyncing] = useState(false)
   const [syncMessage, setSyncMessage] = useState<{ text: string; success: boolean } | null>(null)
+  const [search, setSearch] = useState('')
 
   useEffect(() => {
     fetchClinics()
@@ -205,6 +207,18 @@ export default function AdminConversationsPage() {
     return clinic?.name || 'Неизвестна клиника'
   }
 
+  // Filter conversations by search
+  const filteredConversations = conversations.filter(conv => {
+    if (!search) return true
+    const searchLower = search.toLowerCase()
+    const normalizedSearch = search.replace(/[\s\-\+]/g, '')
+    return (
+      conv.patient?.name?.toLowerCase().includes(searchLower) ||
+      conv.patient_phone?.includes(normalizedSearch) ||
+      conv.patient_phone?.includes(search)
+    )
+  })
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -245,6 +259,20 @@ export default function AdminConversationsPage() {
           </button>
         </div>
       )}
+
+      {/* Search Bar */}
+      <div className="bg-white rounded-xl shadow-sm p-4">
+        <div className="relative max-w-md">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+          <input
+            type="text"
+            placeholder="Търсене по име или телефон..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="w-full pl-10 pr-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900"
+          />
+        </div>
+      </div>
 
       {/* Filters */}
       <div className="flex flex-wrap gap-4">
@@ -362,19 +390,21 @@ export default function AdminConversationsPage() {
 
       {/* Conversations List */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-100 divide-y">
-        {conversations.length === 0 ? (
+        {filteredConversations.length === 0 ? (
           <div className="p-8 text-center">
             <MessageCircle className="w-12 h-12 text-gray-300 mx-auto mb-4" />
             <p className="text-gray-500">Няма намерени разговори</p>
-            <button
-              onClick={syncAllWhatsApp}
-              className="mt-4 text-blue-600 hover:text-blue-700 text-sm font-medium"
-            >
-              Синхронизирай с Evolution API
-            </button>
+            {conversations.length === 0 && (
+              <button
+                onClick={syncAllWhatsApp}
+                className="mt-4 text-blue-600 hover:text-blue-700 text-sm font-medium"
+              >
+                Синхронизирай с Evolution API
+              </button>
+            )}
           </div>
         ) : (
-          conversations.map((conversation) => (
+          filteredConversations.map((conversation) => (
             <div
               key={conversation.id}
               onClick={() => setSelectedConversation(conversation)}
