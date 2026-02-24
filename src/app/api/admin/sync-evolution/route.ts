@@ -166,7 +166,8 @@ export async function POST(request: NextRequest) {
 
           if (messagesResponse.ok) {
             const messagesData = await messagesResponse.json()
-            const messages = messagesData.messages || messagesData || []
+            // Evolution API returns: { messages: { total, pages, records: [...] } }
+            const messages = messagesData.messages?.records || messagesData.records || messagesData.messages || messagesData || []
 
             if (Array.isArray(messages)) {
               for (const msg of messages) {
