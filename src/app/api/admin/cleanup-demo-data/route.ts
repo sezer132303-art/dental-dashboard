@@ -20,11 +20,22 @@ export async function POST(request: NextRequest) {
     const supabase = createServerSupabaseClient()
     const results: { action: string; deleted: number; error?: string }[] = []
 
-    // 1. Delete demo patients (fake phone numbers 359888100001-8)
+    // 1. Delete demo patients by name (from seed data)
+    const demoPatientNames = [
+      'Мария Петрова',
+      'Георги Димитров',
+      'Елена Иванова',
+      'Николай Стоянов',
+      'Анна Георгиева',
+      'Стефан Колев',
+      'Виктория Тодорова',
+      'Александър Младенов'
+    ]
+
     const { data: demoPatients } = await supabase
       .from('patients')
       .select('id')
-      .like('phone', '359888100%')
+      .in('name', demoPatientNames)
 
     if (demoPatients && demoPatients.length > 0) {
       const patientIds = demoPatients.map(p => p.id)
@@ -41,12 +52,20 @@ export async function POST(request: NextRequest) {
       const { count: patCount } = await supabase
         .from('patients')
         .delete({ count: 'exact' })
-        .like('phone', '359888100%')
+        .in('name', demoPatientNames)
 
-      results.push({ action: 'Delete demo patients', deleted: patCount || 0 })
+      results.push({ action: 'Delete demo patients by name', deleted: patCount || 0 })
     } else {
       results.push({ action: 'Delete demo patients', deleted: 0, error: 'No demo patients found' })
     }
+
+    // Also delete by phone pattern
+    const { count: phonePatCount } = await supabase
+      .from('patients')
+      .delete({ count: 'exact' })
+      .like('phone', '359888%')
+
+    results.push({ action: 'Delete demo patients by phone', deleted: phonePatCount || 0 })
 
     // 2. Delete demo users (fake phone numbers)
     const { count: userCount } = await supabase
@@ -56,11 +75,18 @@ export async function POST(request: NextRequest) {
 
     results.push({ action: 'Delete demo users', deleted: userCount || 0 })
 
-    // 3. Delete demo doctors (fake phones 0888 111 111, etc.)
+    // 3. Delete demo doctors by name (from seed data)
+    const demoDoctorNames = [
+      'д-р Иван Иванов',
+      'д-р Петър Стефанов',
+      'д-р Георги Недялков',
+      'д-р Димитър Чакъров'
+    ]
+
     const { data: demoDoctors } = await supabase
       .from('doctors')
       .select('id')
-      .like('phone', '0888 %')
+      .in('name', demoDoctorNames)
 
     if (demoDoctors && demoDoctors.length > 0) {
       const doctorIds = demoDoctors.map(d => d.id)
@@ -77,12 +103,20 @@ export async function POST(request: NextRequest) {
       const { count: docCount } = await supabase
         .from('doctors')
         .delete({ count: 'exact' })
-        .like('phone', '0888 %')
+        .in('name', demoDoctorNames)
 
-      results.push({ action: 'Delete demo doctors', deleted: docCount || 0 })
+      results.push({ action: 'Delete demo doctors by name', deleted: docCount || 0 })
     } else {
       results.push({ action: 'Delete demo doctors', deleted: 0, error: 'No demo doctors found' })
     }
+
+    // Also delete by phone pattern
+    const { count: phoneDocCount } = await supabase
+      .from('doctors')
+      .delete({ count: 'exact' })
+      .like('phone', '0888%')
+
+    results.push({ action: 'Delete demo doctors by phone', deleted: phoneDocCount || 0 })
 
     // 4. Clean up orphaned appointments
     const { count: orphanCount } = await supabase
