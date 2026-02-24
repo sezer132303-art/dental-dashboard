@@ -68,7 +68,7 @@ export async function GET() {
         ...times
       }))
       .sort((a, b) => new Date(b.lastMessage).getTime() - new Date(a.lastMessage).getTime())
-      .slice(0, 50)
+      // No limit - show all conversations
 
     // Get full conversation data
     const conversations = await Promise.all(
@@ -162,7 +162,7 @@ export async function GET() {
           patient,
           messagesCount: parsedMessages.length,
           lastMessage: lastHumanMessage || parsedMessages[parsedMessages.length - 1],
-          recentMessages: parsedMessages.slice(-10).reverse()
+          recentMessages: parsedMessages.reverse()  // Return ALL messages, newest first
         }
       })
     )

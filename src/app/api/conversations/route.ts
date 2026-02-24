@@ -38,7 +38,7 @@ interface Patient {
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url)
-    const limit = parseInt(searchParams.get('limit') || '50')
+    const limit = parseInt(searchParams.get('limit') || '1000')  // No practical limit
     const requestedClinicId = searchParams.get('clinicId')
     const status = searchParams.get('status')
     const channel = searchParams.get('channel') as MessagingChannel | null
@@ -213,7 +213,7 @@ export async function GET(request: NextRequest) {
         },
         messagesCount: formattedMessages.length,
         lastMessage: lastHumanMessage || lastMessage,
-        recentMessages: formattedMessages.slice(-10).reverse()
+        recentMessages: formattedMessages.reverse()  // Return ALL messages, newest first
       }
     })
 
@@ -237,7 +237,7 @@ export async function GET(request: NextRequest) {
 async function getLegacyConversations(request: NextRequest) {
   const supabase = createServerSupabaseClient()
   const { searchParams } = new URL(request.url)
-  const limit = parseInt(searchParams.get('limit') || '50')
+  const limit = parseInt(searchParams.get('limit') || '1000')  // No practical limit
   const clinicId = searchParams.get('clinicId')
   const status = searchParams.get('status')
 
@@ -373,7 +373,7 @@ async function getLegacyConversations(request: NextRequest) {
       },
       messagesCount: formattedMessages.length,
       lastMessage,
-      recentMessages: formattedMessages.slice(-10).reverse()
+      recentMessages: formattedMessages.reverse()  // Return ALL messages, newest first
     }
   })
 

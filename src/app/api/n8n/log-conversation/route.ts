@@ -6,6 +6,7 @@ type MessagingChannel = 'whatsapp' | 'messenger' | 'instagram' | 'viber'
 
 // POST /api/n8n/log-conversation
 // Supports multi-channel messaging: WhatsApp, Messenger, Instagram, Viber
+// Falls back to legacy WhatsApp tables if unified tables don't exist
 export async function POST(request: NextRequest) {
   const validation = await validateApiKey(request)
   if (!validation.isValid) {
@@ -14,7 +15,21 @@ export async function POST(request: NextRequest) {
 
   try {
     const supabase = createServerSupabaseClient()
-    const body = await request.json()
+
+    // Parse JSON body with error handling
+    let body
+    try {
+      body = await request.json()
+    } catch (parseError) {
+      console.error('JSON parse error:', parseError)
+      return NextResponse.json(
+        { error: 'Invalid JSON body', details: String(parseError) },
+        { status: 400 }
+      )
+    }
+
+    // Log incoming request for debugging
+    console.log('log-conversation request:', JSON.stringify(body, null, 2))
 
     const {
       clinicId,
@@ -216,6 +231,103 @@ export async function POST(request: NextRequest) {
 
   } catch (error) {
     console.error('Log conversation error:', error)
-    return NextResponse.json({ error: 'Грешка на сървъра' }, { status: 500 })
+
+    // Try legacy WhatsApp tables as fallback
+    try {
+      const supabase = createServerSupabaseClient()
+
+      let body
+      try {
+        body = await request.clone().json()
+      } catch {
+        return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 })
+      }
+
+      const { instanceName, patientPhone, channelUserId, direction, content, messageType, messageId, rawPayload } = body
+      const phone = channelUserId || patientPhone
+
+      if (!phone || !content || !direction) {
+        return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
+      }
+
+      // Normalize phone
+      let normalizedPhone = String(phone).replace(/\D/g, '')
+      if (normalizedPhone.startsWith('0')) {
+        normalizedPhone = '359' + normalizedPhone.slice(1)
+      } else if (!normalizedPhone.startsWith('359') && normalizedPhone.length < 12) {
+        normalizedPhone = '359' + normalizedPhone
+      }
+
+      // Get or create legacy conversation
+      let { data: conversation } = await supabase
+        .from('whatsapp_conversations')
+        .select('id')
+        .eq('patient_phone', normalizedPhone)
+        .eq('status', 'active')
+        .order('started_at', { ascending: false })
+        .limit(1)
+        .single()
+
+      if (!conversation) {
+        const { data: newConv, error: convError } = await supabase
+          .from('whatsapp_conversations')
+          .insert({
+            patient_phone: normalizedPhone,
+            status: 'active'
+          })
+          .select('id')
+          .single()
+
+        if (convError) {
+          console.error('Legacy conversation error:', convError)
+          return NextResponse.json({
+            error: 'Грешка на сървъра',
+            details: convError.message,
+            code: convError.code
+          }, { status: 500 })
+        }
+        conversation = newConv
+      }
+
+      // Insert legacy message
+      const { data: message, error: msgError } = await supabase
+        .from('whatsapp_messages')
+        .insert({
+          conversation_id: conversation.id,
+          direction,
+          message_type: messageType || 'text',
+          content,
+          message_id: messageId || null,
+          raw_payload: rawPayload || null
+        })
+        .select('id, sent_at')
+        .single()
+
+      if (msgError) {
+        console.error('Legacy message error:', msgError)
+        return NextResponse.json({
+          error: 'Грешка на сървъра',
+          details: msgError.message,
+          code: msgError.code
+        }, { status: 500 })
+      }
+
+      return NextResponse.json({
+        success: true,
+        channel: 'whatsapp',
+        conversationId: conversation.id,
+        messageId: message.id,
+        timestamp: message.sent_at,
+        legacy: true
+      })
+
+    } catch (fallbackError) {
+      console.error('Legacy fallback also failed:', fallbackError)
+      return NextResponse.json({
+        error: 'Грешка на сървъра',
+        details: String(error),
+        fallbackError: String(fallbackError)
+      }, { status: 500 })
+    }
   }
 }

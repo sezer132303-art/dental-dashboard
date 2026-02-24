@@ -463,7 +463,7 @@ export default function ClinicConversations() {
       {/* Conversation detail modal */}
       {selectedConversation && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
-          <div className="bg-white rounded-2xl w-full max-w-2xl max-h-[80vh] flex flex-col">
+          <div className="bg-white rounded-2xl w-full max-w-2xl max-h-[90vh] flex flex-col">
             {/* Modal header */}
             <div className="flex items-center justify-between p-4 border-b">
               <div className="flex items-center gap-3">
