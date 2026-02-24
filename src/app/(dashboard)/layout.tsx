@@ -42,6 +42,7 @@ const adminNavigation = [
   { name: 'Нова клиника', href: '/admin/onboarding', icon: UserPlus },
   { name: 'Клиники', href: '/admin/clinics', icon: Building2 },
   { name: 'Потребители', href: '/admin/users', icon: Users },
+  { name: 'Всички разговори', href: '/admin/conversations', icon: MessageCircle },
 ]
 
 export default function DashboardLayout({

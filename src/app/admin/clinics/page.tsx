@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Building2, Plus, Search, Edit, Trash2, X, User, Calendar, Key, Phone } from 'lucide-react'
+import { Building2, Plus, Search, Edit, Trash2, X, User, Calendar, Key, Phone, RefreshCw, MessageCircle } from 'lucide-react'
 
 interface Clinic {
   id: string
@@ -47,6 +47,8 @@ export default function AdminClinicsPage() {
   const [doctors, setDoctors] = useState<DoctorEntry[]>([{ ...emptyDoctor }])
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
+  const [syncingClinicId, setSyncingClinicId] = useState<string | null>(null)
+  const [syncResult, setSyncResult] = useState<{ clinicId: string; message: string; success: boolean } | null>(null)
 
   useEffect(() => {
     fetchClinics()
@@ -263,6 +265,47 @@ export default function AdminClinicsPage() {
     }
   }
 
+  async function handleSyncWhatsApp(clinicId: string, clinicName: string) {
+    setSyncingClinicId(clinicId)
+    setSyncResult(null)
+
+    try {
+      const response = await fetch('/api/admin/sync-evolution', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer cleanup-demo-2026'
+        },
+        body: JSON.stringify({ clinicId })
+      })
+
+      const data = await response.json()
+
+      if (response.ok) {
+        setSyncResult({
+          clinicId,
+          message: data.message || 'Синхронизацията е успешна!',
+          success: true
+        })
+      } else {
+        setSyncResult({
+          clinicId,
+          message: data.error || data.details || 'Грешка при синхронизация',
+          success: false
+        })
+      }
+    } catch (error) {
+      console.error('Sync error:', error)
+      setSyncResult({
+        clinicId,
+        message: 'Грешка при свързване със сървъра',
+        success: false
+      })
+    } finally {
+      setSyncingClinicId(null)
+    }
+  }
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -309,6 +352,16 @@ export default function AdminClinicsPage() {
                 </div>
               </div>
               <div className="flex items-center gap-1">
+                {clinic.whatsapp_instance && (
+                  <button
+                    onClick={() => handleSyncWhatsApp(clinic.id, clinic.name)}
+                    disabled={syncingClinicId === clinic.id}
+                    className="p-2 hover:bg-green-50 rounded-lg disabled:opacity-50"
+                    title="Синхронизирай WhatsApp"
+                  >
+                    <RefreshCw className={`w-4 h-4 text-green-500 ${syncingClinicId === clinic.id ? 'animate-spin' : ''}`} />
+                  </button>
+                )}
                 <button
                   onClick={() => openEditModal(clinic)}
                   className="p-2 hover:bg-gray-100 rounded-lg"
@@ -371,6 +424,39 @@ export default function AdminClinicsPage() {
           </div>
         </div>
       </div>
+
+      {/* Sync Result Toast */}
+      {syncResult && (
+        <div className={`fixed bottom-4 right-4 p-4 rounded-lg shadow-lg max-w-md z-50 ${
+          syncResult.success ? 'bg-green-50 border border-green-200' : 'bg-red-50 border border-red-200'
+        }`}>
+          <div className="flex items-start gap-3">
+            <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
+              syncResult.success ? 'bg-green-100' : 'bg-red-100'
+            }`}>
+              {syncResult.success ? (
+                <MessageCircle className="w-4 h-4 text-green-600" />
+              ) : (
+                <X className="w-4 h-4 text-red-600" />
+              )}
+            </div>
+            <div className="flex-1">
+              <p className={`text-sm font-medium ${syncResult.success ? 'text-green-800' : 'text-red-800'}`}>
+                {syncResult.success ? 'WhatsApp синхронизация' : 'Грешка'}
+              </p>
+              <p className={`text-sm ${syncResult.success ? 'text-green-700' : 'text-red-700'}`}>
+                {syncResult.message}
+              </p>
+            </div>
+            <button
+              onClick={() => setSyncResult(null)}
+              className="p-1 hover:bg-white/50 rounded"
+            >
+              <X className="w-4 h-4 text-gray-500" />
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Modal */}
       {showModal && (

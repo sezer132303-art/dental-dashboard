@@ -1,11 +1,20 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase'
 
-const EVOLUTION_API_URL = 'https://evo.sdautomation.sbs'
-const EVOLUTION_INSTANCE = 'settbg'
-const EVOLUTION_API_KEY = '0FAE5496B42F-47D8-B760-097162C6F2C3'
+// Default credentials (fallback for backward compatibility)
+const DEFAULT_EVOLUTION_API_URL = 'https://evo.sdautomation.sbs'
+const DEFAULT_EVOLUTION_INSTANCE = 'settbg'
+const DEFAULT_EVOLUTION_API_KEY = '0FAE5496B42F-47D8-B760-097162C6F2C3'
 
-// Sync messages from Evolution API
+interface ClinicCredentials {
+  clinicId: string
+  clinicName: string
+  evolutionApiUrl: string
+  evolutionInstance: string
+  evolutionApiKey: string
+}
+
+// Sync messages from Evolution API for a specific clinic or all clinics
 export async function POST(request: NextRequest) {
   try {
     // Verify admin authorization
@@ -21,79 +30,136 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
+    const body = await request.json().catch(() => ({}))
+    const requestedClinicId = body.clinicId as string | undefined
+    const clearExisting = body.clearExisting !== false // Default to true
+
     const supabase = createServerSupabaseClient()
     const results: { action: string; count: number; error?: string }[] = []
 
-    // 1. Clear old WhatsApp data
-    const { count: convDeleted } = await supabase
-      .from('whatsapp_conversations')
-      .delete({ count: 'exact' })
-      .neq('id', '00000000-0000-0000-0000-000000000000') // Delete all
+    // Get clinic credentials
+    let clinicCredentials: ClinicCredentials[] = []
 
-    results.push({ action: 'Clear old conversations', count: convDeleted || 0 })
+    if (requestedClinicId) {
+      // Sync specific clinic
+      const { data: clinic, error } = await supabase
+        .from('clinics')
+        .select('id, name, evolution_api_url, whatsapp_instance, whatsapp_api_key')
+        .eq('id', requestedClinicId)
+        .single()
 
-    const { count: msgDeleted } = await supabase
-      .from('whatsapp_messages')
-      .delete({ count: 'exact' })
-      .neq('id', '00000000-0000-0000-0000-000000000000') // Delete all
-
-    results.push({ action: 'Clear old messages', count: msgDeleted || 0 })
-
-    // Also clear unified tables
-    const { count: unifiedConvDeleted } = await supabase
-      .from('conversations')
-      .delete({ count: 'exact' })
-      .eq('channel', 'whatsapp')
-
-    results.push({ action: 'Clear unified conversations', count: unifiedConvDeleted || 0 })
-
-    const { count: unifiedMsgDeleted } = await supabase
-      .from('messages')
-      .delete({ count: 'exact' })
-      .neq('id', '00000000-0000-0000-0000-000000000000')
-
-    results.push({ action: 'Clear unified messages', count: unifiedMsgDeleted || 0 })
-
-    // 2. Fetch chats from Evolution API
-    const chatsResponse = await fetch(
-      `${EVOLUTION_API_URL}/chat/findChats/${EVOLUTION_INSTANCE}`,
-      {
-        method: 'POST',
-        headers: {
-          'apikey': EVOLUTION_API_KEY,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({})
+      if (error || !clinic) {
+        return NextResponse.json({ error: 'Clinic not found' }, { status: 404 })
       }
-    )
 
-    if (!chatsResponse.ok) {
-      const errorText = await chatsResponse.text()
-      return NextResponse.json({
-        error: 'Failed to fetch chats from Evolution API',
-        status: chatsResponse.status,
-        details: errorText
-      }, { status: 500 })
+      if (!clinic.whatsapp_instance || !clinic.whatsapp_api_key) {
+        return NextResponse.json({
+          error: 'Clinic has no WhatsApp credentials configured',
+          details: 'Please configure Evolution API URL, Instance Name, and API Key in clinic settings'
+        }, { status: 400 })
+      }
+
+      clinicCredentials.push({
+        clinicId: clinic.id,
+        clinicName: clinic.name,
+        evolutionApiUrl: clinic.evolution_api_url || DEFAULT_EVOLUTION_API_URL,
+        evolutionInstance: clinic.whatsapp_instance,
+        evolutionApiKey: clinic.whatsapp_api_key
+      })
+    } else {
+      // Sync all clinics with WhatsApp credentials, or use default
+      const { data: clinics } = await supabase
+        .from('clinics')
+        .select('id, name, evolution_api_url, whatsapp_instance, whatsapp_api_key')
+        .not('whatsapp_instance', 'is', null)
+
+      if (clinics && clinics.length > 0) {
+        clinicCredentials = clinics
+          .filter(c => c.whatsapp_instance && c.whatsapp_api_key)
+          .map(c => ({
+            clinicId: c.id,
+            clinicName: c.name,
+            evolutionApiUrl: c.evolution_api_url || DEFAULT_EVOLUTION_API_URL,
+            evolutionInstance: c.whatsapp_instance,
+            evolutionApiKey: c.whatsapp_api_key
+          }))
+      }
+
+      // Fallback to default credentials if no clinics configured
+      if (clinicCredentials.length === 0) {
+        const { data: defaultClinic } = await supabase
+          .from('clinics')
+          .select('id, name')
+          .limit(1)
+          .single()
+
+        clinicCredentials.push({
+          clinicId: defaultClinic?.id || 'default',
+          clinicName: defaultClinic?.name || 'Default',
+          evolutionApiUrl: DEFAULT_EVOLUTION_API_URL,
+          evolutionInstance: DEFAULT_EVOLUTION_INSTANCE,
+          evolutionApiKey: DEFAULT_EVOLUTION_API_KEY
+        })
+      }
     }
 
-    const chats = await chatsResponse.json()
-    results.push({ action: 'Fetched chats from Evolution', count: Array.isArray(chats) ? chats.length : 0 })
+    results.push({ action: 'Clinics to sync', count: clinicCredentials.length })
 
-    // 3. Process each chat and fetch messages
+    // Process each clinic
     let totalMessages = 0
     let totalConversations = 0
     let totalInbound = 0
     let totalOutbound = 0
-    const conversationDetails: { phone: string; inbound: number; outbound: number }[] = []
+    const conversationDetails: { clinicName: string; phone: string; inbound: number; outbound: number }[] = []
 
-    if (Array.isArray(chats)) {
+    for (const credentials of clinicCredentials) {
+      const { clinicId, clinicName, evolutionApiUrl, evolutionInstance, evolutionApiKey } = credentials
+
+      // Clear existing data for this clinic if requested
+      if (clearExisting) {
+        const { count: convDeleted } = await supabase
+          .from('whatsapp_conversations')
+          .delete({ count: 'exact' })
+          .eq('clinic_id', clinicId)
+
+        results.push({ action: `Clear conversations for ${clinicName}`, count: convDeleted || 0 })
+      }
+
+      // Fetch chats from Evolution API
+      const chatsResponse = await fetch(
+        `${evolutionApiUrl}/chat/findChats/${evolutionInstance}`,
+        {
+          method: 'POST',
+          headers: {
+            'apikey': evolutionApiKey,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({})
+        }
+      )
+
+      if (!chatsResponse.ok) {
+        const errorText = await chatsResponse.text()
+        results.push({
+          action: `Fetch chats for ${clinicName}`,
+          count: 0,
+          error: `API error ${chatsResponse.status}: ${errorText.substring(0, 100)}`
+        })
+        continue
+      }
+
+      const chats = await chatsResponse.json()
+      results.push({ action: `Fetched chats for ${clinicName}`, count: Array.isArray(chats) ? chats.length : 0 })
+
+      if (!Array.isArray(chats)) continue
+
+      // Process each chat
       for (const chat of chats.slice(0, 50)) { // Limit to 50 most recent chats
         try {
-          // Extract phone number from remoteJid or lastMessage
           const originalRemoteJid = chat.remoteJid || ''
           if (originalRemoteJid.includes('@g.us')) continue // Skip groups
 
-          // For @lid addresses, get actual phone from remoteJidAlt but keep original for findMessages
+          // For @lid addresses, get actual phone from remoteJidAlt
           let phoneJid = originalRemoteJid
           if (originalRemoteJid.includes('@lid') && chat.lastMessage?.key?.remoteJidAlt) {
             phoneJid = chat.lastMessage.key.remoteJidAlt
@@ -105,20 +171,12 @@ export async function POST(request: NextRequest) {
           // Skip test numbers
           if (phone === '359888123456') continue
 
-          // Get default clinic
-          const { data: clinic } = await supabase
-            .from('clinics')
-            .select('id')
-            .limit(1)
-            .single()
-
-          const clinicId = clinic?.id || process.env.DEFAULT_CLINIC_ID
-
-          // Check if conversation exists
+          // Check if conversation exists for this clinic
           let { data: existingConv } = await supabase
             .from('whatsapp_conversations')
             .select('id')
             .eq('patient_phone', phone)
+            .eq('clinic_id', clinicId)
             .limit(1)
             .single()
 
@@ -148,13 +206,13 @@ export async function POST(request: NextRequest) {
 
           totalConversations++
 
-          // Fetch messages for this chat (use originalRemoteJid for @lid chats)
+          // Fetch messages for this chat
           const messagesResponse = await fetch(
-            `${EVOLUTION_API_URL}/chat/findMessages/${EVOLUTION_INSTANCE}`,
+            `${evolutionApiUrl}/chat/findMessages/${evolutionInstance}`,
             {
               method: 'POST',
               headers: {
-                'apikey': EVOLUTION_API_KEY,
+                'apikey': evolutionApiKey,
                 'Content-Type': 'application/json'
               },
               body: JSON.stringify({
@@ -163,14 +221,13 @@ export async function POST(request: NextRequest) {
                     remoteJid: originalRemoteJid
                   }
                 },
-                limit: 100 // Last 100 messages per chat
+                limit: 100
               })
             }
           )
 
           if (messagesResponse.ok) {
             const messagesData = await messagesResponse.json()
-            // Evolution API returns: { messages: { total, pages, records: [...] } }
             const messages = messagesData.messages?.records || messagesData.records || messagesData.messages || messagesData || []
 
             let chatInbound = 0
@@ -215,12 +272,12 @@ export async function POST(request: NextRequest) {
             }
 
             // Track per-conversation stats
-            const existingDetail = conversationDetails.find(d => d.phone === phone)
+            const existingDetail = conversationDetails.find(d => d.phone === phone && d.clinicName === clinicName)
             if (existingDetail) {
               existingDetail.inbound += chatInbound
               existingDetail.outbound += chatOutbound
             } else {
-              conversationDetails.push({ phone, inbound: chatInbound, outbound: chatOutbound })
+              conversationDetails.push({ clinicName, phone, inbound: chatInbound, outbound: chatOutbound })
             }
           }
         } catch (chatError) {
@@ -229,8 +286,8 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    results.push({ action: 'Created conversations', count: totalConversations })
-    results.push({ action: 'Imported messages', count: totalMessages })
+    results.push({ action: 'Total conversations', count: totalConversations })
+    results.push({ action: 'Total messages', count: totalMessages })
     results.push({ action: 'Inbound messages (from patients)', count: totalInbound })
     results.push({ action: 'Outbound messages (from bot)', count: totalOutbound })
 
@@ -253,7 +310,10 @@ export async function POST(request: NextRequest) {
 export async function GET() {
   return NextResponse.json({
     message: 'Use POST to sync messages from Evolution API',
-    evolutionApi: EVOLUTION_API_URL,
-    instance: EVOLUTION_INSTANCE
+    usage: {
+      syncAllClinics: 'POST without body',
+      syncSpecificClinic: 'POST with { clinicId: "uuid" }',
+      keepExistingData: 'POST with { clearExisting: false }'
+    }
   })
 }
