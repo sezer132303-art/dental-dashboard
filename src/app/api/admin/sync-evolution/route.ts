@@ -86,12 +86,20 @@ export async function POST(request: NextRequest) {
     if (Array.isArray(chats)) {
       for (const chat of chats.slice(0, 50)) { // Limit to 50 most recent chats
         try {
-          // Extract phone number from remoteJid
-          const remoteJid = chat.id || chat.remoteJid || ''
-          if (!remoteJid || remoteJid.includes('@g.us')) continue // Skip groups
+          // Extract phone number from remoteJid or lastMessage
+          let remoteJid = chat.remoteJid || ''
+          if (remoteJid.includes('@g.us')) continue // Skip groups
+
+          // Handle @lid addresses - get actual phone from remoteJidAlt
+          if (remoteJid.includes('@lid') && chat.lastMessage?.key?.remoteJidAlt) {
+            remoteJid = chat.lastMessage.key.remoteJidAlt
+          }
 
           const phone = remoteJid.replace('@s.whatsapp.net', '').replace(/\D/g, '')
           if (!phone || phone.length < 10) continue
+
+          // Skip test numbers
+          if (phone === '359888123456') continue
 
           // Get default clinic
           const { data: clinic } = await supabase
@@ -102,24 +110,36 @@ export async function POST(request: NextRequest) {
 
           const clinicId = clinic?.id || process.env.DEFAULT_CLINIC_ID
 
-          // Create conversation
-          const { data: conversation, error: convError } = await supabase
+          // Check if conversation exists
+          let { data: existingConv } = await supabase
             .from('whatsapp_conversations')
-            .upsert({
-              patient_phone: phone,
-              clinic_id: clinicId,
-              status: 'active',
-              started_at: new Date().toISOString()
-            }, {
-              onConflict: 'patient_phone',
-              ignoreDuplicates: false
-            })
             .select('id')
+            .eq('patient_phone', phone)
+            .limit(1)
             .single()
 
-          if (convError) {
-            console.error('Error creating conversation:', convError)
-            continue
+          let conversationId: string
+
+          if (existingConv) {
+            conversationId = existingConv.id
+          } else {
+            // Create new conversation
+            const { data: newConv, error: convError } = await supabase
+              .from('whatsapp_conversations')
+              .insert({
+                patient_phone: phone,
+                clinic_id: clinicId,
+                status: 'active',
+                started_at: chat.updatedAt || new Date().toISOString()
+              })
+              .select('id')
+              .single()
+
+            if (convError || !newConv) {
+              console.error('Error creating conversation:', convError)
+              continue
+            }
+            conversationId = newConv.id
           }
 
           totalConversations++
@@ -165,7 +185,7 @@ export async function POST(request: NextRequest) {
                 const { error: msgError } = await supabase
                   .from('whatsapp_messages')
                   .insert({
-                    conversation_id: conversation.id,
+                    conversation_id: conversationId,
                     direction,
                     content,
                     message_type: 'text',
