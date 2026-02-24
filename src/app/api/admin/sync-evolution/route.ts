@@ -82,6 +82,9 @@ export async function POST(request: NextRequest) {
     // 3. Process each chat and fetch messages
     let totalMessages = 0
     let totalConversations = 0
+    let totalInbound = 0
+    let totalOutbound = 0
+    const conversationDetails: { phone: string; inbound: number; outbound: number }[] = []
 
     if (Array.isArray(chats)) {
       for (const chat of chats.slice(0, 50)) { // Limit to 50 most recent chats
@@ -170,6 +173,9 @@ export async function POST(request: NextRequest) {
             // Evolution API returns: { messages: { total, pages, records: [...] } }
             const messages = messagesData.messages?.records || messagesData.records || messagesData.messages || messagesData || []
 
+            let chatInbound = 0
+            let chatOutbound = 0
+
             if (Array.isArray(messages)) {
               for (const msg of messages) {
                 const content = msg.message?.conversation ||
@@ -197,8 +203,24 @@ export async function POST(request: NextRequest) {
 
                 if (!msgError) {
                   totalMessages++
+                  if (direction === 'inbound') {
+                    totalInbound++
+                    chatInbound++
+                  } else {
+                    totalOutbound++
+                    chatOutbound++
+                  }
                 }
               }
+            }
+
+            // Track per-conversation stats
+            const existingDetail = conversationDetails.find(d => d.phone === phone)
+            if (existingDetail) {
+              existingDetail.inbound += chatInbound
+              existingDetail.outbound += chatOutbound
+            } else {
+              conversationDetails.push({ phone, inbound: chatInbound, outbound: chatOutbound })
             }
           }
         } catch (chatError) {
@@ -209,11 +231,14 @@ export async function POST(request: NextRequest) {
 
     results.push({ action: 'Created conversations', count: totalConversations })
     results.push({ action: 'Imported messages', count: totalMessages })
+    results.push({ action: 'Inbound messages (from patients)', count: totalInbound })
+    results.push({ action: 'Outbound messages (from bot)', count: totalOutbound })
 
     return NextResponse.json({
       success: true,
-      message: `Sync completed. ${totalConversations} conversations, ${totalMessages} messages imported.`,
-      results
+      message: `Sync completed. ${totalConversations} conversations, ${totalMessages} messages (${totalInbound} inbound, ${totalOutbound} outbound).`,
+      results,
+      conversationDetails
     })
 
   } catch (error) {
