@@ -12,7 +12,9 @@ import {
   Send,
   AlertCircle,
   Calendar,
-  RefreshCw
+  RefreshCw,
+  Plus,
+  Loader2
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -77,6 +79,8 @@ export default function ClinicConversations() {
   const [search, setSearch] = useState('')
   const [selectedConversation, setSelectedConversation] = useState<Conversation | null>(null)
   const [reminderFilter, setReminderFilter] = useState<'all' | 'sent' | 'pending' | 'failed'>('all')
+  const [generating, setGenerating] = useState(false)
+  const [generateMessage, setGenerateMessage] = useState<{ text: string; success: boolean } | null>(null)
 
   useEffect(() => {
     if (activeTab === 'conversations') {
@@ -114,6 +118,28 @@ export default function ClinicConversations() {
       console.error('Error fetching reminders:', error)
     } finally {
       setLoading(false)
+    }
+  }
+
+  async function generateReminders() {
+    setGenerating(true)
+    setGenerateMessage(null)
+    try {
+      const response = await fetch('/api/reminders/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' }
+      })
+      const data = await response.json()
+      if (response.ok) {
+        setGenerateMessage({ text: data.message, success: true })
+        fetchReminders()
+      } else {
+        setGenerateMessage({ text: data.error || 'Грешка', success: false })
+      }
+    } catch (error) {
+      setGenerateMessage({ text: 'Грешка при свързване', success: false })
+    } finally {
+      setGenerating(false)
     }
   }
 
@@ -327,8 +353,21 @@ export default function ClinicConversations() {
             </div>
           )}
 
-          {/* Filter and Refresh */}
-          <div className="bg-white rounded-xl shadow-sm p-4 flex items-center justify-between">
+          {/* Generate Message */}
+          {generateMessage && (
+            <div className={cn(
+              'p-4 rounded-lg flex items-center justify-between',
+              generateMessage.success ? 'bg-green-50 text-green-800' : 'bg-red-50 text-red-800'
+            )}>
+              <span>{generateMessage.text}</span>
+              <button onClick={() => setGenerateMessage(null)}>
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          )}
+
+          {/* Filter and Actions */}
+          <div className="bg-white rounded-xl shadow-sm p-4 flex items-center justify-between flex-wrap gap-4">
             <div className="flex items-center gap-2">
               <span className="text-sm text-gray-500">Филтър:</span>
               <select
@@ -342,13 +381,27 @@ export default function ClinicConversations() {
                 <option value="failed">Неуспешни</option>
               </select>
             </div>
-            <button
-              onClick={fetchReminders}
-              className="flex items-center gap-2 px-4 py-2 text-sm text-teal-600 hover:bg-teal-50 rounded-lg transition-colors"
-            >
-              <RefreshCw className="w-4 h-4" />
-              Обнови
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={generateReminders}
+                disabled={generating}
+                className="flex items-center gap-2 px-4 py-2 text-sm bg-teal-600 text-white hover:bg-teal-700 rounded-lg transition-colors disabled:opacity-50"
+              >
+                {generating ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <Plus className="w-4 h-4" />
+                )}
+                {generating ? 'Генериране...' : 'Генерирай напомняния'}
+              </button>
+              <button
+                onClick={fetchReminders}
+                className="flex items-center gap-2 px-4 py-2 text-sm text-teal-600 hover:bg-teal-50 rounded-lg transition-colors"
+              >
+                <RefreshCw className="w-4 h-4" />
+                Обнови
+              </button>
+            </div>
           </div>
 
           {/* Reminders list */}
@@ -363,6 +416,18 @@ export default function ClinicConversations() {
               <p className="text-sm text-gray-400 mt-2">
                 Напомнянията се изпращат автоматично 24ч и 3ч преди записан час
               </p>
+              <button
+                onClick={generateReminders}
+                disabled={generating}
+                className="mt-4 inline-flex items-center gap-2 px-4 py-2 text-sm bg-teal-600 text-white hover:bg-teal-700 rounded-lg transition-colors disabled:opacity-50"
+              >
+                {generating ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <Plus className="w-4 h-4" />
+                )}
+                Генерирай напомняния за бъдещи часове
+              </button>
             </div>
           ) : (
             <div className="bg-white rounded-xl shadow-sm overflow-hidden">

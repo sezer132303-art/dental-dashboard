@@ -180,6 +180,48 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Грешка при създаване на час' }, { status: 500 })
     }
 
+    // Automatically create reminders for the appointment
+    if (appointment) {
+      const appointmentDateTime = new Date(`${appointment_date}T${start_time}`)
+      const now = new Date()
+
+      // Create reminder records (24h and 3h before)
+      const reminders = []
+
+      // 24h reminder - scheduled for 24 hours before
+      const reminder24h = new Date(appointmentDateTime.getTime() - 24 * 60 * 60 * 1000)
+      if (reminder24h > now) {
+        reminders.push({
+          appointment_id: appointment.id,
+          type: '24h',
+          status: 'pending',
+          scheduled_for: reminder24h.toISOString()
+        })
+      }
+
+      // 3h reminder - scheduled for 3 hours before
+      const reminder3h = new Date(appointmentDateTime.getTime() - 3 * 60 * 60 * 1000)
+      if (reminder3h > now) {
+        reminders.push({
+          appointment_id: appointment.id,
+          type: '3h',
+          status: 'pending',
+          scheduled_for: reminder3h.toISOString()
+        })
+      }
+
+      if (reminders.length > 0) {
+        const { error: reminderError } = await supabase
+          .from('reminders')
+          .insert(reminders)
+
+        if (reminderError) {
+          console.error('Error creating reminders:', reminderError)
+          // Don't fail the appointment creation, just log the error
+        }
+      }
+    }
+
     return NextResponse.json({ appointment }, { status: 201 })
   } catch (error) {
     console.error('Create appointment error:', error)
