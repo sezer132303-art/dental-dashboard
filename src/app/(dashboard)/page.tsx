@@ -12,18 +12,8 @@ import {
   Stethoscope
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import {
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  ResponsiveContainer,
-  PieChart,
-  Pie,
-  Cell
-} from 'recharts'
+
+
 
 interface DoctorStats {
   id: string
@@ -51,8 +41,6 @@ interface Metrics {
   currentMonth?: number
   currentYear?: number
 }
-
-const COLORS = ['#3B82F6', '#8B5CF6', '#10B981', '#F59E0B', '#EF4444', '#EC4899']
 
 interface KpiCardProps {
   title: string
@@ -140,14 +128,6 @@ export default function DashboardPage() {
     )
   }
 
-  // Prepare data for charts - use monthly data
-  const doctorChartData = metrics.doctors.map(d => ({
-    name: d.name.replace('д-р ', ''),
-    appointments: d.patientsThisMonth || d.appointmentsThisMonth || 0
-  }))
-
-  const totalDoctorAppointments = doctorChartData.reduce((sum, d) => sum + d.appointments, 0)
-
   // Bulgarian month names
   const monthNames = ['Януари', 'Февруари', 'Март', 'Април', 'Май', 'Юни',
                       'Юли', 'Август', 'Септември', 'Октомври', 'Ноември', 'Декември']
@@ -227,80 +207,6 @@ export default function DashboardPage() {
         />
       </div>
 
-      {/* Charts */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Doctor Appointments Chart */}
-        <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">
-            Часове по лекари ({currentMonthName})
-          </h3>
-          {doctorChartData.length > 0 && totalDoctorAppointments > 0 ? (
-            <ResponsiveContainer width="100%" height={300}>
-              <BarChart data={doctorChartData}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                <XAxis dataKey="name" stroke="#374151" fontSize={12} />
-                <YAxis stroke="#374151" fontSize={12} />
-                <Tooltip
-                  contentStyle={{
-                    backgroundColor: 'white',
-                    border: '1px solid #e5e7eb',
-                    borderRadius: '8px'
-                  }}
-                />
-                <Bar
-                  dataKey="appointments"
-                  fill="#8B5CF6"
-                  radius={[4, 4, 0, 0]}
-                />
-              </BarChart>
-            </ResponsiveContainer>
-          ) : (
-            <div className="h-[300px] flex flex-col items-center justify-center text-gray-400">
-              <p>Няма записани часове за {currentMonthName}</p>
-            </div>
-          )}
-        </div>
-
-        {/* Doctor Distribution Pie */}
-        <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">
-            Разпределение по лекари ({currentMonthName})
-          </h3>
-          {doctorChartData.length > 0 && totalDoctorAppointments > 0 ? (
-            <ResponsiveContainer width="100%" height={300}>
-              <PieChart>
-                <Pie
-                  data={doctorChartData}
-                  cx="50%"
-                  cy="50%"
-                  innerRadius={60}
-                  outerRadius={100}
-                  paddingAngle={2}
-                  dataKey="appointments"
-                  label={({ name, percent }) => `${name} (${((percent || 0) * 100).toFixed(0)}%)`}
-                  labelLine={false}
-                >
-                  {doctorChartData.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                  ))}
-                </Pie>
-                <Tooltip
-                  contentStyle={{
-                    backgroundColor: 'white',
-                    border: '1px solid #e5e7eb',
-                    borderRadius: '8px'
-                  }}
-                />
-              </PieChart>
-            </ResponsiveContainer>
-          ) : (
-            <div className="h-[300px] flex items-center justify-center text-gray-400">
-              Няма записани часове за {currentMonthName}
-            </div>
-          )}
-        </div>
-      </div>
-
       {/* Doctor Stats Table */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
         <div className="px-6 py-4 border-b border-gray-100">
@@ -353,7 +259,7 @@ export default function DashboardPage() {
                       {doctor.specialty || 'Общ стоматолог'}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-gray-900 font-medium">
-                      {doctor.patientsThisMonth || doctor.appointmentsThisMonth || 0}
+                      {doctor.patientsThisMonth || 0}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-green-600 font-medium">
                       {doctor.completed}
