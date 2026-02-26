@@ -6,7 +6,6 @@ import {
   TrendingDown,
   Users,
   Calendar,
-  AlertTriangle,
   CheckCircle2,
   Clock,
   Loader2,
@@ -20,7 +19,10 @@ import {
   YAxis,
   CartesianGrid,
   Tooltip,
-  ResponsiveContainer
+  ResponsiveContainer,
+  PieChart,
+  Pie,
+  Cell
 } from 'recharts'
 
 interface DoctorStats {
@@ -28,18 +30,11 @@ interface DoctorStats {
   name: string
   specialty: string | null
   color: string
+  patientsThisMonth: number
   patientsThisWeek: number
   completed: number
   noShow: number
   attendanceRate: number
-  // Today stats
-  appointmentsToday: number
-  completedToday: number
-  noShowToday: number
-  // Month stats
-  appointmentsThisMonth: number
-  completedThisMonth: number
-  noShowThisMonth: number
 }
 
 interface Metrics {
@@ -47,10 +42,17 @@ interface Metrics {
   attendanceChange: number
   totalPatients: number
   appointmentsThisWeek: number
+  appointmentsThisMonth: number
   appointmentsToday: number
   noShows: number
   doctors: DoctorStats[]
+  weekRange?: { start: string; end: string }
+  today?: string
+  currentMonth?: number
+  currentYear?: number
 }
+
+const COLORS = ['#3B82F6', '#8B5CF6', '#10B981', '#F59E0B', '#EF4444', '#EC4899']
 
 interface KpiCardProps {
   title: string
@@ -70,7 +72,7 @@ function KpiCard({ title, value, change, icon: Icon, iconBg, suffix }: KpiCardPr
           <p className="text-2xl font-bold text-gray-900">
             {value}{suffix}
           </p>
-          {change !== undefined && (
+          {change !== undefined && change !== 0 && (
             <div className={cn(
               'flex items-center gap-1 mt-2 text-sm font-medium',
               change >= 0 ? 'text-green-600' : 'text-red-600'
@@ -138,65 +140,78 @@ export default function DashboardPage() {
     )
   }
 
-  // Calculate week and month dates
-  const today = new Date()
-  const dayOfWeek = today.getDay()
-  const mondayOffset = dayOfWeek === 0 ? -6 : 1 - dayOfWeek
-  const startOfWeek = new Date(today)
-  startOfWeek.setDate(today.getDate() + mondayOffset)
-  const endOfWeek = new Date(startOfWeek)
-  endOfWeek.setDate(startOfWeek.getDate() + 6)
-
-  // Month name in Bulgarian
-  const monthNames = ['Януари', 'Февруари', 'Март', 'Април', 'Май', 'Юни',
-                      'Юли', 'Август', 'Септември', 'Октомври', 'Ноември', 'Декември']
-  const currentMonth = monthNames[today.getMonth()]
-  const currentYear = today.getFullYear()
-
-  const formatShortDate = (date: Date) => {
-    const day = date.getDate().toString().padStart(2, '0')
-    const month = (date.getMonth() + 1).toString().padStart(2, '0')
-    return `${day}.${month}`
-  }
-
-  const weekRange = `${formatShortDate(startOfWeek)} - ${formatShortDate(endOfWeek)}`
-  const todayFormatted = formatShortDate(today)
-
-  // Prepare data for charts - using MONTHLY data
+  // Prepare data for charts - use monthly data
   const doctorChartData = metrics.doctors.map(d => ({
     name: d.name.replace('д-р ', ''),
-    appointments: d.appointmentsThisMonth || 0
+    appointments: d.patientsThisMonth || d.appointmentsThisMonth || 0
   }))
+
+  const totalDoctorAppointments = doctorChartData.reduce((sum, d) => sum + d.appointments, 0)
+
+  // Bulgarian month names
+  const monthNames = ['Януари', 'Февруари', 'Март', 'Април', 'Май', 'Юни',
+                      'Юли', 'Август', 'Септември', 'Октомври', 'Ноември', 'Декември']
+  const currentMonthName = metrics.currentMonth ? monthNames[metrics.currentMonth - 1] : ''
+
+  // Format date for display
+  const formatDateBG = (dateStr: string) => {
+    if (!dateStr) return ''
+    const [year, month, day] = dateStr.split('-')
+    return `${day}.${month}.${year}`
+  }
 
   return (
     <div className="space-y-6">
-      {/* This Week Section Header */}
-      <div className="bg-gradient-to-r from-blue-600 to-purple-600 rounded-xl p-6 text-white">
-        <h2 className="text-2xl font-bold mb-1">Тази седмица</h2>
-        <p className="text-blue-100">{weekRange}</p>
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">Табло</h1>
+          <p className="text-sm text-gray-500">
+            {currentMonthName} {metrics.currentYear}
+            {metrics.today && ` | Днес: ${formatDateBG(metrics.today)}`}
+          </p>
+        </div>
       </div>
 
-      {/* KPI Cards */}
+      {/* KPI Cards - This Week */}
+      <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-100">
+        <h3 className="text-sm font-semibold text-gray-500 mb-3 uppercase tracking-wider">
+          Тази седмица ({metrics.weekRange ? `${formatDateBG(metrics.weekRange.start)} - ${formatDateBG(metrics.weekRange.end)}` : ''})
+        </h3>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <div className="text-center p-3 bg-blue-50 rounded-lg">
+            <p className="text-3xl font-bold text-blue-600">{metrics.appointmentsThisWeek}</p>
+            <p className="text-xs text-gray-600">Часове</p>
+          </div>
+          <div className="text-center p-3 bg-green-50 rounded-lg">
+            <p className="text-3xl font-bold text-green-600">{metrics.appointmentsToday}</p>
+            <p className="text-xs text-gray-600">Днес</p>
+          </div>
+          <div className="text-center p-3 bg-purple-50 rounded-lg">
+            <p className="text-3xl font-bold text-purple-600">{metrics.doctors.reduce((sum, d) => sum + (d.patientsThisWeek || 0), 0)}</p>
+            <p className="text-xs text-gray-600">По лекари</p>
+          </div>
+          <div className="text-center p-3 bg-red-50 rounded-lg">
+            <p className="text-3xl font-bold text-red-600">{metrics.noShows}</p>
+            <p className="text-xs text-gray-600">Неявявания</p>
+          </div>
+        </div>
+      </div>
+
+      {/* KPI Cards - This Month */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+        <KpiCard
+          title="Часове този месец"
+          value={metrics.appointmentsThisMonth || 0}
+          icon={Calendar}
+          iconBg="bg-purple-500"
+        />
         <KpiCard
           title="Процент присъствие"
           value={metrics.attendanceRate}
           suffix="%"
-          change={metrics.attendanceChange}
           icon={CheckCircle2}
           iconBg="bg-green-500"
-        />
-        <KpiCard
-          title="Часове днес"
-          value={metrics.appointmentsToday}
-          icon={Clock}
-          iconBg="bg-blue-500"
-        />
-        <KpiCard
-          title="Часове тази седмица"
-          value={metrics.appointmentsThisWeek}
-          icon={Calendar}
-          iconBg="bg-purple-500"
         />
         <KpiCard
           title="Общо пациенти"
@@ -210,101 +225,87 @@ export default function DashboardPage() {
           icon={Stethoscope}
           iconBg="bg-cyan-500"
         />
-        <KpiCard
-          title="Неявявания (седмица)"
-          value={metrics.noShows}
-          icon={AlertTriangle}
-          iconBg="bg-red-500"
-        />
       </div>
 
-      {/* Today's Stats per Doctor */}
-      <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
-        <h3 className="text-lg font-semibold text-gray-900 mb-4">
-          Днес по лекари <span className="text-gray-400 font-normal">({todayFormatted})</span>
-        </h3>
-        {metrics.doctors.length > 0 ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-            {metrics.doctors.map((doctor) => (
-              <div
-                key={doctor.id}
-                className="bg-gray-50 rounded-lg p-4 border border-gray-100"
-              >
-                <div className="flex items-center gap-3 mb-3">
-                  <div
-                    className={cn(
-                      'w-10 h-10 rounded-full flex items-center justify-center text-white font-bold',
-                      doctor.color || 'bg-blue-500'
-                    )}
-                  >
-                    {doctor.name.split(' ')[1]?.charAt(0) || doctor.name.charAt(0)}
-                  </div>
-                  <div>
-                    <p className="font-medium text-gray-900">{doctor.name}</p>
-                    <p className="text-xs text-gray-500">{doctor.specialty || 'Общ стоматолог'}</p>
-                  </div>
-                </div>
-                <div className="grid grid-cols-3 gap-2 text-center">
-                  <div className="bg-white rounded-lg p-2">
-                    <p className="text-lg font-bold text-blue-600">{doctor.appointmentsToday}</p>
-                    <p className="text-xs text-gray-500">Часове</p>
-                  </div>
-                  <div className="bg-white rounded-lg p-2">
-                    <p className="text-lg font-bold text-green-600">{doctor.completedToday}</p>
-                    <p className="text-xs text-gray-500">Завършени</p>
-                  </div>
-                  <div className="bg-white rounded-lg p-2">
-                    <p className="text-lg font-bold text-red-600">{doctor.noShowToday}</p>
-                    <p className="text-xs text-gray-500">Неявявания</p>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        ) : (
-          <div className="text-center text-gray-400 py-8">
-            Няма добавени лекари
-          </div>
-        )}
-      </div>
+      {/* Charts */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Doctor Appointments Chart */}
+        <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
+          <h3 className="text-lg font-semibold text-gray-900 mb-4">
+            Часове по лекари ({currentMonthName})
+          </h3>
+          {doctorChartData.length > 0 && totalDoctorAppointments > 0 ? (
+            <ResponsiveContainer width="100%" height={300}>
+              <BarChart data={doctorChartData}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                <XAxis dataKey="name" stroke="#374151" fontSize={12} />
+                <YAxis stroke="#374151" fontSize={12} />
+                <Tooltip
+                  contentStyle={{
+                    backgroundColor: 'white',
+                    border: '1px solid #e5e7eb',
+                    borderRadius: '8px'
+                  }}
+                />
+                <Bar
+                  dataKey="appointments"
+                  fill="#8B5CF6"
+                  radius={[4, 4, 0, 0]}
+                />
+              </BarChart>
+            </ResponsiveContainer>
+          ) : (
+            <div className="h-[300px] flex flex-col items-center justify-center text-gray-400">
+              <p>Няма записани часове за {currentMonthName}</p>
+            </div>
+          )}
+        </div>
 
-      {/* Charts - Monthly */}
-      <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
-        <h3 className="text-lg font-semibold text-gray-900 mb-4">
-          Часове по лекари - {currentMonth} {currentYear}
-        </h3>
-        {doctorChartData.length > 0 ? (
-          <ResponsiveContainer width="100%" height={300}>
-            <BarChart data={doctorChartData}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-              <XAxis dataKey="name" stroke="#374151" fontSize={12} />
-              <YAxis stroke="#374151" fontSize={12} />
-              <Tooltip
-                contentStyle={{
-                  backgroundColor: 'white',
-                  border: '1px solid #e5e7eb',
-                  borderRadius: '8px'
-                }}
-              />
-              <Bar
-                dataKey="appointments"
-                fill="#8B5CF6"
-                radius={[4, 4, 0, 0]}
-              />
-            </BarChart>
-          </ResponsiveContainer>
-        ) : (
-          <div className="h-[300px] flex items-center justify-center text-gray-400">
-            Няма данни
-          </div>
-        )}
+        {/* Doctor Distribution Pie */}
+        <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
+          <h3 className="text-lg font-semibold text-gray-900 mb-4">
+            Разпределение по лекари ({currentMonthName})
+          </h3>
+          {doctorChartData.length > 0 && totalDoctorAppointments > 0 ? (
+            <ResponsiveContainer width="100%" height={300}>
+              <PieChart>
+                <Pie
+                  data={doctorChartData}
+                  cx="50%"
+                  cy="50%"
+                  innerRadius={60}
+                  outerRadius={100}
+                  paddingAngle={2}
+                  dataKey="appointments"
+                  label={({ name, percent }) => `${name} (${((percent || 0) * 100).toFixed(0)}%)`}
+                  labelLine={false}
+                >
+                  {doctorChartData.map((entry, index) => (
+                    <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                  ))}
+                </Pie>
+                <Tooltip
+                  contentStyle={{
+                    backgroundColor: 'white',
+                    border: '1px solid #e5e7eb',
+                    borderRadius: '8px'
+                  }}
+                />
+              </PieChart>
+            </ResponsiveContainer>
+          ) : (
+            <div className="h-[300px] flex items-center justify-center text-gray-400">
+              Няма записани часове за {currentMonthName}
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Doctor Stats Table */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
         <div className="px-6 py-4 border-b border-gray-100">
           <h3 className="text-lg font-semibold text-gray-900">
-            Статистика по лекари - тази седмица <span className="text-gray-400 font-normal">({weekRange})</span>
+            Статистика по лекари ({currentMonthName})
           </h3>
         </div>
         {metrics.doctors.length > 0 ? (
@@ -319,7 +320,7 @@ export default function DashboardPage() {
                     Специалност
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">
-                    Общо часове
+                    Часове (месец)
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">
                     Завършени
@@ -352,7 +353,7 @@ export default function DashboardPage() {
                       {doctor.specialty || 'Общ стоматолог'}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-gray-900 font-medium">
-                      {doctor.patientsThisWeek}
+                      {doctor.patientsThisMonth || doctor.appointmentsThisMonth || 0}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-green-600 font-medium">
                       {doctor.completed}

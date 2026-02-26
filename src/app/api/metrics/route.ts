@@ -176,15 +176,33 @@ export async function GET(request: NextRequest) {
 
     const { data: todayAppointments } = await todayQuery
 
+    // This month's appointments
+    let monthQuery = supabase
+      .from('appointments')
+      .select('id, status')
+      .gte('appointment_date', formatDate(startOfMonth))
+      .lte('appointment_date', formatDate(endOfMonth))
+
+    if (clinicId) {
+      monthQuery = monthQuery.eq('clinic_id', clinicId)
+    }
+
+    const { data: thisMonthAppointments } = await monthQuery
+
     return NextResponse.json({
       metrics: {
         attendanceRate: Math.round(thisWeekAttendance * 10) / 10,
         attendanceChange: Math.round(attendanceChange * 10) / 10,
         totalPatients: totalPatients || 0,
         appointmentsThisWeek: thisWeekTotal,
+        appointmentsThisMonth: thisMonthAppointments?.length || 0,
         appointmentsToday: todayAppointments?.length || 0,
         noShows: thisWeekNoShow,
-        doctors: doctorStats
+        doctors: doctorStats,
+        weekRange: { start: formatDate(startOfWeek), end: formatDate(endOfWeek) },
+        today: formatDate(today),
+        currentMonth: today.getMonth() + 1,
+        currentYear: today.getFullYear()
       }
     })
   } catch (error) {
