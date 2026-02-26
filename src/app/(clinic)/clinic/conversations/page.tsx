@@ -14,9 +14,15 @@ import {
   Calendar,
   RefreshCw,
   Plus,
-  Loader2
+  Loader2,
+  Phone,
+  ArrowRight,
+  Filter
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import ChannelBadge from '@/components/ChannelBadge'
+
+type MessagingChannel = 'whatsapp' | 'messenger' | 'instagram' | 'viber'
 
 interface Message {
   id: string
@@ -28,12 +34,15 @@ interface Message {
 
 interface Conversation {
   id: string
-  patient_phone: string
-  status: string
+  channel: MessagingChannel
+  channel_user_id: string
+  patient_phone: string | null
+  patient_id: string | null
+  status: 'active' | 'resolved' | 'booking_complete'
   started_at: string
   updated_at: string
   patient: {
-    id: string
+    id: string | null
     name: string
     phone: string
   } | null
@@ -68,6 +77,34 @@ interface ReminderStats {
   by3h: number
 }
 
+const statusColors: Record<string, string> = {
+  active: 'bg-green-100 text-green-800',
+  resolved: 'bg-gray-100 text-gray-800',
+  booking_complete: 'bg-blue-100 text-blue-800'
+}
+
+const statusLabels: Record<string, string> = {
+  active: 'Активен',
+  resolved: 'Приключен',
+  booking_complete: 'Запазен час'
+}
+
+const intentLabels: Record<string, string> = {
+  booking_request: 'Заявка за час',
+  availability_inquiry: 'Запитване',
+  confirmation: 'Потвърждение',
+  cancellation: 'Отказ',
+  general_inquiry: 'Общо запитване'
+}
+
+const intentColors: Record<string, string> = {
+  booking_request: 'bg-purple-100 text-purple-800',
+  availability_inquiry: 'bg-yellow-100 text-yellow-800',
+  confirmation: 'bg-green-100 text-green-800',
+  cancellation: 'bg-red-100 text-red-800',
+  general_inquiry: 'bg-gray-100 text-gray-800'
+}
+
 type TabType = 'conversations' | 'reminders'
 
 export default function ClinicConversations() {
@@ -77,6 +114,7 @@ export default function ClinicConversations() {
   const [reminderStats, setReminderStats] = useState<ReminderStats | null>(null)
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
+  const [statusFilter, setStatusFilter] = useState<string>('all')
   const [selectedConversation, setSelectedConversation] = useState<Conversation | null>(null)
   const [reminderFilter, setReminderFilter] = useState<'all' | 'sent' | 'pending' | 'failed'>('all')
   const [generating, setGenerating] = useState(false)
@@ -87,15 +125,20 @@ export default function ClinicConversations() {
   useEffect(() => {
     if (activeTab === 'conversations') {
       fetchConversations()
+      const interval = setInterval(fetchConversations, 30000)
+      return () => clearInterval(interval)
     } else {
       fetchReminders()
     }
-  }, [activeTab])
+  }, [activeTab, statusFilter])
 
   async function fetchConversations() {
-    setLoading(true)
     try {
-      const response = await fetch('/api/clinic/conversations')
+      const params = new URLSearchParams()
+      if (statusFilter !== 'all') {
+        params.append('status', statusFilter)
+      }
+      const response = await fetch(`/api/conversations?${params}`)
       if (response.ok) {
         const data = await response.json()
         setConversations(data.conversations || [])
@@ -145,6 +188,20 @@ export default function ClinicConversations() {
     }
   }
 
+  async function resolveConversation(conversationId: string) {
+    try {
+      await fetch('/api/conversations', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ conversationId, action: 'resolve' })
+      })
+      fetchConversations()
+      setSelectedConversation(null)
+    } catch (error) {
+      console.error('Error resolving conversation:', error)
+    }
+  }
+
   async function generateReminders() {
     setGenerating(true)
     setGenerateMessage(null)
@@ -167,6 +224,28 @@ export default function ClinicConversations() {
     }
   }
 
+  const formatPhone = (phone: string) => {
+    if (phone.startsWith('359')) {
+      return `+${phone.slice(0, 3)} ${phone.slice(3, 6)} ${phone.slice(6, 9)} ${phone.slice(9)}`
+    }
+    return phone
+  }
+
+  const formatRelativeTime = (dateStr: string) => {
+    const date = new Date(dateStr)
+    const now = new Date()
+    const diffMs = now.getTime() - date.getTime()
+    const diffMins = Math.floor(diffMs / 60000)
+    const diffHours = Math.floor(diffMs / 3600000)
+    const diffDays = Math.floor(diffMs / 86400000)
+
+    if (diffMins < 1) return 'сега'
+    if (diffMins < 60) return `${diffMins} мин`
+    if (diffHours < 24) return `${diffHours} ч`
+    if (diffDays < 7) return `${diffDays} дни`
+    return date.toLocaleDateString('bg-BG')
+  }
+
   const filteredConversations = conversations.filter(conv => {
     if (!search) return true
     const searchLower = search.toLowerCase()
@@ -186,14 +265,13 @@ export default function ClinicConversations() {
     return reminder.status === reminderFilter
   })
 
+  const activeCount = conversations.filter(c => c.status === 'active').length
+  const bookingCount = conversations.filter(c => c.status === 'booking_complete').length
+  const resolvedCount = conversations.filter(c => c.status === 'resolved').length
+
   const formatDate = (dateStr: string) => {
     if (!dateStr) return ''
-    const date = new Date(dateStr)
-    return date.toLocaleDateString('bg-BG', {
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric'
-    })
+    return new Date(dateStr).toLocaleDateString('bg-BG', { day: '2-digit', month: '2-digit', year: 'numeric' })
   }
 
   const formatTime = (timeStr: string) => {
@@ -229,22 +307,39 @@ export default function ClinicConversations() {
     }
   }
 
+  if (loading && activeTab === 'conversations') {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <Loader2 className="w-8 h-8 animate-spin text-teal-600" />
+      </div>
+    )
+  }
+
   return (
     <div className="space-y-6">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">WhatsApp комуникация</h1>
-          <p className="text-gray-500">Разговори и напомняния с пациенти</p>
+          <h1 className="text-2xl font-bold text-gray-900">Разговори</h1>
+          <p className="text-gray-500">Следене на съобщения от всички канали</p>
         </div>
-        <button
-          onClick={syncWhatsApp}
-          disabled={syncing}
-          className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 transition"
-        >
-          <RefreshCw className={`w-4 h-4 ${syncing ? 'animate-spin' : ''}`} />
-          {syncing ? 'Синхронизиране...' : 'Синхронизирай WhatsApp'}
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={syncWhatsApp}
+            disabled={syncing}
+            className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 transition"
+          >
+            <RefreshCw className={`w-4 h-4 ${syncing ? 'animate-spin' : ''}`} />
+            {syncing ? 'Синхронизиране...' : 'Синхронизирай WhatsApp'}
+          </button>
+          <button
+            onClick={() => activeTab === 'conversations' ? fetchConversations() : fetchReminders()}
+            className="flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
+          >
+            <RefreshCw className="w-4 h-4" />
+            Обнови
+          </button>
+        </div>
       </div>
 
       {/* Sync message */}
@@ -290,7 +385,55 @@ export default function ClinicConversations() {
 
       {activeTab === 'conversations' ? (
         <>
-          {/* Search */}
+          {/* Stats */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-100">
+              <div className="flex items-center gap-3">
+                <div className="p-3 rounded-xl bg-blue-100">
+                  <MessageCircle className="w-5 h-5 text-blue-600" />
+                </div>
+                <div>
+                  <p className="text-sm text-gray-500">Общо</p>
+                  <p className="text-2xl font-bold text-gray-900">{conversations.length}</p>
+                </div>
+              </div>
+            </div>
+            <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-100">
+              <div className="flex items-center gap-3">
+                <div className="p-3 rounded-xl bg-green-100">
+                  <Clock className="w-5 h-5 text-green-600" />
+                </div>
+                <div>
+                  <p className="text-sm text-gray-500">Активни</p>
+                  <p className="text-2xl font-bold text-green-600">{activeCount}</p>
+                </div>
+              </div>
+            </div>
+            <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-100">
+              <div className="flex items-center gap-3">
+                <div className="p-3 rounded-xl bg-purple-100">
+                  <Calendar className="w-5 h-5 text-purple-600" />
+                </div>
+                <div>
+                  <p className="text-sm text-gray-500">Запазени часове</p>
+                  <p className="text-2xl font-bold text-purple-600">{bookingCount}</p>
+                </div>
+              </div>
+            </div>
+            <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-100">
+              <div className="flex items-center gap-3">
+                <div className="p-3 rounded-xl bg-gray-100">
+                  <CheckCircle className="w-5 h-5 text-gray-600" />
+                </div>
+                <div>
+                  <p className="text-sm text-gray-500">Приключени</p>
+                  <p className="text-2xl font-bold text-gray-600">{resolvedCount}</p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Search Bar */}
           <div className="bg-white rounded-xl shadow-sm p-4">
             <div className="relative max-w-md">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
@@ -304,68 +447,105 @@ export default function ClinicConversations() {
             </div>
           </div>
 
-          {/* Conversations list */}
-          {loading ? (
-            <div className="flex items-center justify-center h-64">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-teal-600"></div>
-            </div>
-          ) : filteredConversations.length === 0 ? (
-            <div className="bg-white rounded-xl shadow-sm p-12 text-center">
-              <MessageCircle className="w-12 h-12 mx-auto mb-4 text-gray-300" />
-              <p className="text-gray-500">Няма намерени разговори</p>
-              {conversations.length === 0 && (
+          {/* Status Filter */}
+          <div className="flex items-center gap-2">
+            <Filter className="w-4 h-4 text-gray-500" />
+            <span className="text-sm text-gray-600">Статус:</span>
+            <div className="flex gap-1">
+              {['all', 'active', 'booking_complete', 'resolved'].map((f) => (
                 <button
-                  onClick={syncWhatsApp}
-                  disabled={syncing}
-                  className="mt-4 inline-flex items-center gap-2 text-green-600 hover:text-green-700 text-sm font-medium"
+                  key={f}
+                  onClick={() => setStatusFilter(f)}
+                  className={cn(
+                    'px-3 py-1.5 rounded-lg text-sm font-medium transition',
+                    statusFilter === f
+                      ? 'bg-teal-600 text-white'
+                      : 'bg-white text-gray-700 border border-gray-200 hover:bg-gray-50'
+                  )}
                 >
-                  <RefreshCw className={`w-4 h-4 ${syncing ? 'animate-spin' : ''}`} />
-                  Синхронизирай с Evolution API
+                  {f === 'all' ? 'Всички' : statusLabels[f]}
                 </button>
-              )}
+              ))}
             </div>
-          ) : (
-            <div className="bg-white rounded-xl shadow-sm divide-y">
-              {filteredConversations.map((conv) => (
+          </div>
+
+          {/* Conversations List */}
+          <div className="bg-white rounded-xl shadow-sm border border-gray-100 divide-y">
+            {filteredConversations.length === 0 ? (
+              <div className="p-8 text-center">
+                <MessageCircle className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+                <p className="text-gray-500">Няма намерени разговори</p>
+                {conversations.length === 0 && (
+                  <button
+                    onClick={syncWhatsApp}
+                    disabled={syncing}
+                    className="mt-4 inline-flex items-center gap-2 text-green-600 hover:text-green-700 text-sm font-medium"
+                  >
+                    <RefreshCw className={`w-4 h-4 ${syncing ? 'animate-spin' : ''}`} />
+                    Синхронизирай с Evolution API
+                  </button>
+                )}
+              </div>
+            ) : (
+              filteredConversations.map((conversation) => (
                 <div
-                  key={conv.id}
-                  onClick={() => setSelectedConversation(conv)}
-                  className="p-4 hover:bg-gray-50 cursor-pointer transition-colors"
+                  key={conversation.id}
+                  onClick={() => setSelectedConversation(conversation)}
+                  className="p-4 hover:bg-gray-50 cursor-pointer transition"
                 >
-                  <div className="flex items-start gap-4">
-                    <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center flex-shrink-0">
-                      <User className="w-6 h-6 text-green-600" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center justify-between">
-                        <h3 className="font-semibold text-gray-900">
-                          {conv.patient?.name || conv.patient_phone}
-                        </h3>
-                        <span className="text-xs text-gray-400">
-                          {new Date(conv.updated_at).toLocaleDateString('bg-BG')}
-                        </span>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-4">
+                      <div className="relative">
+                        <div className="w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center">
+                          <User className="w-6 h-6 text-gray-500" />
+                        </div>
+                        <div className="absolute -bottom-1 -right-1">
+                          <ChannelBadge channel={conversation.channel || 'whatsapp'} size="sm" showLabel={false} />
+                        </div>
                       </div>
-                      <p className="text-sm text-gray-500 truncate mt-1">
-                        {conv.lastMessage?.content || 'Няма съобщения'}
-                      </p>
-                      <div className="flex items-center gap-3 mt-2">
-                        <span className="text-xs text-gray-400 flex items-center gap-1">
-                          <MessageCircle className="w-3 h-3" />
-                          {conv.messagesCount} съобщения
-                        </span>
-                        {conv.status === 'booking_complete' && (
-                          <span className="text-xs text-green-600 flex items-center gap-1">
-                            <CheckCircle className="w-3 h-3" />
-                            Записан час
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <h3 className="font-medium text-gray-900">
+                            {conversation.patient?.name || 'Непознат'}
+                          </h3>
+                          <span className={cn(
+                            'px-2 py-0.5 text-xs font-medium rounded-full',
+                            statusColors[conversation.status]
+                          )}>
+                            {statusLabels[conversation.status]}
                           </span>
+                        </div>
+                        <div className="flex items-center gap-2 text-sm text-gray-600 mt-1">
+                          {conversation.patient_phone ? (
+                            <>
+                              <Phone className="w-3 h-3" />
+                              {formatPhone(conversation.patient_phone)}
+                            </>
+                          ) : (
+                            <span className="text-gray-400">{conversation.channel_user_id?.substring(0, 15)}...</span>
+                          )}
+                        </div>
+                        {conversation.lastMessage && (
+                          <p className="text-sm text-gray-500 mt-1 truncate max-w-md">
+                            {conversation.lastMessage.direction === 'inbound' ? '← ' : '→ '}
+                            {conversation.lastMessage.content.substring(0, 50)}
+                            {conversation.lastMessage.content.length > 50 ? '...' : ''}
+                          </p>
                         )}
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-sm text-gray-500">{formatRelativeTime(conversation.updated_at)}</p>
+                      <div className="flex items-center gap-1 mt-1">
+                        <span className="text-xs text-gray-400">{conversation.messagesCount} съобщения</span>
+                        <ArrowRight className="w-4 h-4 text-gray-400" />
                       </div>
                     </div>
                   </div>
                 </div>
-              ))}
-            </div>
-          )}
+              ))
+            )}
+          </div>
         </>
       ) : (
         <>
@@ -453,11 +633,7 @@ export default function ClinicConversations() {
                 disabled={generating}
                 className="flex items-center gap-2 px-4 py-2 text-sm bg-teal-600 text-white hover:bg-teal-700 rounded-lg transition-colors disabled:opacity-50"
               >
-                {generating ? (
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                ) : (
-                  <Plus className="w-4 h-4" />
-                )}
+                {generating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
                 {generating ? 'Генериране...' : 'Генерирай напомняния'}
               </button>
               <button
@@ -473,25 +649,21 @@ export default function ClinicConversations() {
           {/* Reminders list */}
           {loading ? (
             <div className="flex items-center justify-center h-64">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-teal-600"></div>
+              <Loader2 className="w-8 h-8 animate-spin text-teal-600" />
             </div>
           ) : filteredReminders.length === 0 ? (
             <div className="bg-white rounded-xl shadow-sm p-12 text-center">
               <Bell className="w-12 h-12 mx-auto mb-4 text-gray-300" />
               <p className="text-gray-500">Няма намерени напомняния</p>
               <p className="text-sm text-gray-400 mt-2">
-                Напомнянията се изпращат автоматично 24ч и 3ч преди записан час
+                Напомнянията се създават автоматично 24ч и 3ч преди записан час
               </p>
               <button
                 onClick={generateReminders}
                 disabled={generating}
                 className="mt-4 inline-flex items-center gap-2 px-4 py-2 text-sm bg-teal-600 text-white hover:bg-teal-700 rounded-lg transition-colors disabled:opacity-50"
               >
-                {generating ? (
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                ) : (
-                  <Plus className="w-4 h-4" />
-                )}
+                {generating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
                 Генерирай напомняния за бъдещи часове
               </button>
             </div>
@@ -500,21 +672,11 @@ export default function ClinicConversations() {
               <table className="w-full">
                 <thead className="bg-gray-50">
                   <tr>
-                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">
-                      Пациент
-                    </th>
-                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">
-                      Час
-                    </th>
-                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">
-                      Тип
-                    </th>
-                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">
-                      Статус
-                    </th>
-                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">
-                      Изпратено
-                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Пациент</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Час</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Тип</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Статус</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Изпратено</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y">
@@ -526,12 +688,8 @@ export default function ClinicConversations() {
                             <User className="w-4 h-4 text-green-600" />
                           </div>
                           <div>
-                            <p className="font-medium text-gray-900">
-                              {reminder.appointment?.patient?.name || 'Неизвестен'}
-                            </p>
-                            <p className="text-xs text-gray-500">
-                              {reminder.appointment?.patient?.phone}
-                            </p>
+                            <p className="font-medium text-gray-900">{reminder.appointment?.patient?.name || 'Неизвестен'}</p>
+                            <p className="text-xs text-gray-500">{reminder.appointment?.patient?.phone}</p>
                           </div>
                         </div>
                       </td>
@@ -543,9 +701,7 @@ export default function ClinicConversations() {
                           <Clock className="w-4 h-4 text-gray-400" />
                           <span>{formatTime(reminder.appointment?.start_time)}</span>
                         </div>
-                        <p className="text-xs text-gray-500 mt-1">
-                          {reminder.appointment?.doctor?.name}
-                        </p>
+                        <p className="text-xs text-gray-500 mt-1">{reminder.appointment?.doctor?.name}</p>
                       </td>
                       <td className="px-4 py-3">
                         <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-700">
@@ -572,10 +728,7 @@ export default function ClinicConversations() {
                           <div>
                             <p>{formatDate(reminder.sent_at)}</p>
                             <p className="text-xs">
-                              {new Date(reminder.sent_at).toLocaleTimeString('bg-BG', {
-                                hour: '2-digit',
-                                minute: '2-digit'
-                              })}
+                              {new Date(reminder.sent_at).toLocaleTimeString('bg-BG', { hour: '2-digit', minute: '2-digit' })}
                             </p>
                           </div>
                         ) : (
@@ -591,21 +744,33 @@ export default function ClinicConversations() {
         </>
       )}
 
-      {/* Conversation detail modal */}
+      {/* Conversation Detail Modal */}
       {selectedConversation && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
-          <div className="bg-white rounded-2xl w-full max-w-2xl max-h-[90vh] flex flex-col">
-            {/* Modal header */}
-            <div className="flex items-center justify-between p-4 border-b">
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl w-full max-w-2xl mx-4 max-h-[90vh] overflow-hidden flex flex-col">
+            {/* Header */}
+            <div className="p-4 border-b flex items-center justify-between">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center">
-                  <User className="w-5 h-5 text-green-600" />
+                <div className="relative">
+                  <div className="w-10 h-10 bg-gray-100 rounded-full flex items-center justify-center">
+                    <User className="w-5 h-5 text-gray-600" />
+                  </div>
+                  <div className="absolute -bottom-1 -right-1">
+                    <ChannelBadge channel={selectedConversation.channel || 'whatsapp'} size="sm" showLabel={false} />
+                  </div>
                 </div>
                 <div>
-                  <h3 className="font-semibold text-gray-900">
-                    {selectedConversation.patient?.name || 'Пациент'}
-                  </h3>
-                  <p className="text-sm text-gray-500">{selectedConversation.patient_phone}</p>
+                  <div className="flex items-center gap-2">
+                    <h2 className="font-semibold text-gray-900">
+                      {selectedConversation.patient?.name || 'Непознат'}
+                    </h2>
+                    <ChannelBadge channel={selectedConversation.channel || 'whatsapp'} size="sm" />
+                  </div>
+                  <p className="text-sm text-gray-500">
+                    {selectedConversation.patient_phone
+                      ? formatPhone(selectedConversation.patient_phone)
+                      : selectedConversation.channel_user_id}
+                  </p>
                 </div>
               </div>
               <button
@@ -616,39 +781,70 @@ export default function ClinicConversations() {
               </button>
             </div>
 
-            {/* Messages */}
-            <div className="flex-1 overflow-y-auto p-4 space-y-4">
-              {selectedConversation.recentMessages.slice().reverse().map((msg) => (
-                <div
-                  key={msg.id}
-                  className={`flex ${msg.direction === 'outbound' ? 'justify-end' : 'justify-start'}`}
-                >
+            {/* Messages - Full History */}
+            <div className="flex-1 overflow-y-auto p-4 space-y-4 max-h-[60vh]">
+              {selectedConversation.recentMessages
+                .slice()
+                .reverse()
+                .map((msg) => (
                   <div
-                    className={`max-w-[75%] rounded-2xl px-4 py-2 ${
-                      msg.direction === 'outbound'
-                        ? 'bg-teal-500 text-white rounded-br-md'
-                        : 'bg-gray-100 text-gray-900 rounded-bl-md'
-                    }`}
+                    key={msg.id}
+                    className={cn(
+                      'flex',
+                      msg.direction === 'inbound' ? 'justify-start' : 'justify-end'
+                    )}
                   >
-                    <p className="text-sm whitespace-pre-wrap">{msg.content}</p>
-                    <p className={`text-xs mt-1 ${
-                      msg.direction === 'outbound' ? 'text-teal-100' : 'text-gray-400'
-                    }`}>
-                      {new Date(msg.sent_at).toLocaleTimeString('bg-BG', {
-                        hour: '2-digit',
-                        minute: '2-digit'
-                      })}
-                    </p>
+                    <div
+                      className={cn(
+                        'max-w-[80%] rounded-xl px-4 py-2',
+                        msg.direction === 'inbound'
+                          ? 'bg-gray-100 text-gray-900'
+                          : 'bg-green-500 text-white'
+                      )}
+                    >
+                      <p className="text-sm whitespace-pre-wrap">{msg.content}</p>
+                      <div className="flex items-center justify-between gap-2 mt-1">
+                        {msg.parsed_intent && (
+                          <span className={cn(
+                            'text-xs px-2 py-0.5 rounded-full',
+                            msg.direction === 'inbound'
+                              ? intentColors[msg.parsed_intent] || 'bg-gray-200'
+                              : 'bg-green-600 text-green-100'
+                          )}>
+                            {intentLabels[msg.parsed_intent] || msg.parsed_intent}
+                          </span>
+                        )}
+                        <span className={cn(
+                          'text-xs',
+                          msg.direction === 'inbound' ? 'text-gray-400' : 'text-green-200'
+                        )}>
+                          {new Date(msg.sent_at).toLocaleTimeString('bg-BG', {
+                            hour: '2-digit',
+                            minute: '2-digit'
+                          })}
+                        </span>
+                      </div>
+                    </div>
                   </div>
-                </div>
-              ))}
+                ))}
             </div>
 
-            {/* Modal footer */}
-            <div className="p-4 border-t bg-gray-50 rounded-b-2xl">
-              <p className="text-sm text-gray-500 text-center">
-                Това е само преглед на разговора. Отговорите се изпращат автоматично от чатбота.
-              </p>
+            {/* Actions */}
+            <div className="p-4 border-t flex justify-end gap-3">
+              {selectedConversation.status === 'active' && (
+                <button
+                  onClick={() => resolveConversation(selectedConversation.id)}
+                  className="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700"
+                >
+                  Маркирай като приключен
+                </button>
+              )}
+              <button
+                onClick={() => setSelectedConversation(null)}
+                className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
+              >
+                Затвори
+              </button>
             </div>
           </div>
         </div>
