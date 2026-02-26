@@ -164,10 +164,19 @@ export default function ClinicPatients() {
     }
   }
 
-  const filteredPatients = patients.filter(patient =>
-    patient.name?.toLowerCase().includes(search.toLowerCase()) ||
-    patient.phone?.includes(search)
-  )
+  const filteredPatients = patients.filter(patient => {
+    if (!search) return true
+    const searchLower = search.toLowerCase()
+    let normalizedSearch = search.replace(/[\s\-\+]/g, '')
+    if (normalizedSearch.startsWith('0') && normalizedSearch.length >= 2) {
+      normalizedSearch = '359' + normalizedSearch.slice(1)
+    }
+    return (
+      patient.name?.toLowerCase().includes(searchLower) ||
+      patient.phone?.includes(normalizedSearch) ||
+      patient.phone?.includes(search)
+    )
+  })
 
   const formatDate = (dateStr: string) => {
     return new Date(dateStr).toLocaleDateString('bg-BG')

@@ -81,6 +81,8 @@ export default function ClinicConversations() {
   const [reminderFilter, setReminderFilter] = useState<'all' | 'sent' | 'pending' | 'failed'>('all')
   const [generating, setGenerating] = useState(false)
   const [generateMessage, setGenerateMessage] = useState<{ text: string; success: boolean } | null>(null)
+  const [syncing, setSyncing] = useState(false)
+  const [syncMessage, setSyncMessage] = useState<{ text: string; success: boolean } | null>(null)
 
   useEffect(() => {
     if (activeTab === 'conversations') {
@@ -121,6 +123,28 @@ export default function ClinicConversations() {
     }
   }
 
+  async function syncWhatsApp() {
+    setSyncing(true)
+    setSyncMessage(null)
+    try {
+      const response = await fetch('/api/clinic/sync-evolution', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' }
+      })
+      const data = await response.json()
+      if (response.ok) {
+        setSyncMessage({ text: data.message, success: true })
+        fetchConversations()
+      } else {
+        setSyncMessage({ text: data.error || 'Грешка при синхронизация', success: false })
+      }
+    } catch (error) {
+      setSyncMessage({ text: 'Грешка при свързване', success: false })
+    } finally {
+      setSyncing(false)
+    }
+  }
+
   async function generateReminders() {
     setGenerating(true)
     setGenerateMessage(null)
@@ -143,10 +167,19 @@ export default function ClinicConversations() {
     }
   }
 
-  const filteredConversations = conversations.filter(conv =>
-    conv.patient?.name?.toLowerCase().includes(search.toLowerCase()) ||
-    conv.patient_phone?.includes(search)
-  )
+  const filteredConversations = conversations.filter(conv => {
+    if (!search) return true
+    const searchLower = search.toLowerCase()
+    let normalizedSearch = search.replace(/[\s\-\+]/g, '')
+    if (normalizedSearch.startsWith('0') && normalizedSearch.length >= 2) {
+      normalizedSearch = '359' + normalizedSearch.slice(1)
+    }
+    return (
+      conv.patient?.name?.toLowerCase().includes(searchLower) ||
+      conv.patient_phone?.includes(normalizedSearch) ||
+      conv.patient_phone?.includes(search)
+    )
+  })
 
   const filteredReminders = reminders.filter(reminder => {
     if (reminderFilter === 'all') return true
@@ -199,10 +232,33 @@ export default function ClinicConversations() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900">WhatsApp комуникация</h1>
-        <p className="text-gray-500">Разговори и напомняния с пациенти</p>
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">WhatsApp комуникация</h1>
+          <p className="text-gray-500">Разговори и напомняния с пациенти</p>
+        </div>
+        <button
+          onClick={syncWhatsApp}
+          disabled={syncing}
+          className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 transition"
+        >
+          <RefreshCw className={`w-4 h-4 ${syncing ? 'animate-spin' : ''}`} />
+          {syncing ? 'Синхронизиране...' : 'Синхронизирай WhatsApp'}
+        </button>
       </div>
+
+      {/* Sync message */}
+      {syncMessage && (
+        <div className={cn(
+          'p-4 rounded-lg flex items-center justify-between',
+          syncMessage.success ? 'bg-green-50 text-green-800' : 'bg-red-50 text-red-800'
+        )}>
+          <span>{syncMessage.text}</span>
+          <button onClick={() => setSyncMessage(null)}>
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
 
       {/* Tabs */}
       <div className="bg-white rounded-xl shadow-sm p-1 inline-flex">
@@ -257,6 +313,16 @@ export default function ClinicConversations() {
             <div className="bg-white rounded-xl shadow-sm p-12 text-center">
               <MessageCircle className="w-12 h-12 mx-auto mb-4 text-gray-300" />
               <p className="text-gray-500">Няма намерени разговори</p>
+              {conversations.length === 0 && (
+                <button
+                  onClick={syncWhatsApp}
+                  disabled={syncing}
+                  className="mt-4 inline-flex items-center gap-2 text-green-600 hover:text-green-700 text-sm font-medium"
+                >
+                  <RefreshCw className={`w-4 h-4 ${syncing ? 'animate-spin' : ''}`} />
+                  Синхронизирай с Evolution API
+                </button>
+              )}
             </div>
           ) : (
             <div className="bg-white rounded-xl shadow-sm divide-y">

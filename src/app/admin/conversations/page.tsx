@@ -211,7 +211,10 @@ export default function AdminConversationsPage() {
   const filteredConversations = conversations.filter(conv => {
     if (!search) return true
     const searchLower = search.toLowerCase()
-    const normalizedSearch = search.replace(/[\s\-\+]/g, '')
+    let normalizedSearch = search.replace(/[\s\-\+]/g, '')
+    if (normalizedSearch.startsWith('0') && normalizedSearch.length >= 2) {
+      normalizedSearch = '359' + normalizedSearch.slice(1)
+    }
     return (
       conv.patient?.name?.toLowerCase().includes(searchLower) ||
       conv.patient_phone?.includes(normalizedSearch) ||
