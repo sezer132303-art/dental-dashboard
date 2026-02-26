@@ -5,10 +5,8 @@ import {
   MessageCircle,
   Phone,
   User,
-  Calendar,
   CheckCircle,
   Clock,
-  ArrowRight,
   RefreshCw,
   Loader2,
   X,
@@ -47,15 +45,6 @@ interface Conversation {
   recentMessages: Message[]
 }
 
-interface ChannelStats {
-  channel: MessagingChannel
-  total_conversations: number
-  active_conversations: number
-  completed_bookings: number
-  conversations_this_week: number
-  conversations_today: number
-}
-
 const statusColors: Record<string, string> = {
   active: 'bg-green-100 text-green-800',
   resolved: 'bg-gray-100 text-gray-800',
@@ -86,7 +75,6 @@ const intentColors: Record<string, string> = {
 
 export default function ConversationsPage() {
   const [conversations, setConversations] = useState<Conversation[]>([])
-  const [channelStats, setChannelStats] = useState<ChannelStats[]>([])
   const [loading, setLoading] = useState(true)
   const [selectedConversation, setSelectedConversation] = useState<Conversation | null>(null)
   const [statusFilter, setStatusFilter] = useState<string>('all')
@@ -97,7 +85,6 @@ export default function ConversationsPage() {
 
   useEffect(() => {
     fetchConversations()
-    // Auto-refresh every 30 seconds
     const interval = setInterval(fetchConversations, 30000)
     return () => clearInterval(interval)
   }, [statusFilter, channelFilter])
@@ -115,9 +102,6 @@ export default function ConversationsPage() {
       const data = await response.json()
       if (data.conversations) {
         setConversations(data.conversations)
-      }
-      if (data.channelStats) {
-        setChannelStats(data.channelStats)
       }
     } catch (error) {
       console.error('Error fetching conversations:', error)
@@ -179,34 +163,18 @@ export default function ConversationsPage() {
   const formatTime = (dateStr: string) => {
     const date = new Date(dateStr)
     const now = new Date()
-    const diffMs = now.getTime() - date.getTime()
-    const diffMins = Math.floor(diffMs / 60000)
-    const diffHours = Math.floor(diffMs / 3600000)
-    const diffDays = Math.floor(diffMs / 86400000)
+    const diff = now.getTime() - date.getTime()
+    const hours = Math.floor(diff / (1000 * 60 * 60))
 
-    if (diffMins < 1) return 'сега'
-    if (diffMins < 60) return `${diffMins} мин`
-    if (diffHours < 24) return `${diffHours} ч`
-    if (diffDays < 7) return `${diffDays} дни`
-    return date.toLocaleDateString('bg-BG')
+    if (hours < 1) {
+      const minutes = Math.floor(diff / (1000 * 60))
+      return `преди ${minutes} мин`
+    }
+    if (hours < 24) {
+      return `преди ${hours} ч`
+    }
+    return date.toLocaleDateString('bg-BG', { day: 'numeric', month: 'short' })
   }
-
-  const activeCount = conversations.filter(c => c.status === 'active').length
-  const bookingCount = conversations.filter(c => c.status === 'booking_complete').length
-
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
-      </div>
-    )
-  }
-
-  // Count conversations by channel
-  const channelCounts = conversations.reduce((acc, c) => {
-    acc[c.channel] = (acc[c.channel] || 0) + 1
-    return acc
-  }, {} as Record<string, number>)
 
   // Filter conversations by search
   const filteredConversations = conversations.filter(conv => {
@@ -223,31 +191,32 @@ export default function ConversationsPage() {
     )
   })
 
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
+      </div>
+    )
+  }
+
   return (
     <div className="space-y-6">
-      {/* Header */}
+      {/* Header with Sync */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Разговори</h1>
-          <p className="text-gray-600">Следене на съобщения от всички канали</p>
+          <h2 className="text-xl font-semibold text-gray-900">Всички WhatsApp разговори</h2>
+          <p className="text-sm text-gray-500 mt-1">
+            Преглед на разговорите от всички канали
+          </p>
         </div>
-        <div className="flex items-center gap-2">
-          <button
-            onClick={syncWhatsApp}
-            disabled={syncing}
-            className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 transition"
-          >
-            <RefreshCw className={`w-4 h-4 ${syncing ? 'animate-spin' : ''}`} />
-            {syncing ? 'Синхронизиране...' : 'Синхронизирай WhatsApp'}
-          </button>
-          <button
-            onClick={() => fetchConversations()}
-            className="flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
-          >
-            <RefreshCw className="w-4 h-4" />
-            Обнови
-          </button>
-        </div>
+        <button
+          onClick={syncWhatsApp}
+          disabled={syncing}
+          className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 transition"
+        >
+          <RefreshCw className={`w-5 h-5 ${syncing ? 'animate-spin' : ''}`} />
+          {syncing ? 'Синхронизиране...' : 'Синхронизирай WhatsApp'}
+        </button>
       </div>
 
       {/* Sync message */}
@@ -277,87 +246,24 @@ export default function ConversationsPage() {
         </div>
       </div>
 
-      {/* Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-100">
-          <div className="flex items-center gap-3">
-            <div className="p-3 rounded-xl bg-blue-100">
-              <MessageCircle className="w-5 h-5 text-blue-600" />
-            </div>
-            <div>
-              <p className="text-sm text-gray-500">Общо</p>
-              <p className="text-2xl font-bold text-gray-900">{conversations.length}</p>
-            </div>
-          </div>
-        </div>
-        <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-100">
-          <div className="flex items-center gap-3">
-            <div className="p-3 rounded-xl bg-green-100">
-              <Clock className="w-5 h-5 text-green-600" />
-            </div>
-            <div>
-              <p className="text-sm text-gray-500">Активни</p>
-              <p className="text-2xl font-bold text-green-600">{activeCount}</p>
-            </div>
-          </div>
-        </div>
-        <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-100">
-          <div className="flex items-center gap-3">
-            <div className="p-3 rounded-xl bg-purple-100">
-              <Calendar className="w-5 h-5 text-purple-600" />
-            </div>
-            <div>
-              <p className="text-sm text-gray-500">Запазени часове</p>
-              <p className="text-2xl font-bold text-purple-600">{bookingCount}</p>
-            </div>
-          </div>
-        </div>
-        <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-100">
-          <div className="flex items-center gap-3">
-            <div className="p-3 rounded-xl bg-gray-100">
-              <CheckCircle className="w-5 h-5 text-gray-600" />
-            </div>
-            <div>
-              <p className="text-sm text-gray-500">Приключени</p>
-              <p className="text-2xl font-bold text-gray-600">
-                {conversations.filter(c => c.status === 'resolved').length}
-              </p>
-            </div>
-          </div>
-        </div>
-      </div>
-
       {/* Filters */}
       <div className="flex flex-wrap gap-4">
         {/* Channel Filter */}
         <div className="flex items-center gap-2">
-          <Filter className="w-4 h-4 text-gray-500" />
           <span className="text-sm text-gray-600">Канал:</span>
           <div className="flex gap-1">
-            <button
-              onClick={() => setChannelFilter('all')}
-              className={cn(
-                'px-3 py-1.5 rounded-lg text-sm font-medium transition',
-                channelFilter === 'all'
-                  ? 'bg-gray-800 text-white'
-                  : 'bg-white text-gray-700 border border-gray-200 hover:bg-gray-50'
-              )}
-            >
-              Всички
-            </button>
-            {(['whatsapp', 'messenger', 'instagram', 'viber'] as MessagingChannel[]).map((ch) => (
+            {['all', 'whatsapp', 'messenger', 'instagram', 'viber'].map((ch) => (
               <button
                 key={ch}
                 onClick={() => setChannelFilter(ch)}
                 className={cn(
-                  'px-3 py-1.5 rounded-lg text-sm font-medium transition flex items-center gap-1.5',
+                  'px-3 py-1.5 rounded-lg text-sm font-medium transition',
                   channelFilter === ch
-                    ? 'bg-gray-800 text-white'
+                    ? 'bg-blue-600 text-white'
                     : 'bg-white text-gray-700 border border-gray-200 hover:bg-gray-50'
                 )}
               >
-                <ChannelBadge channel={ch} size="sm" showLabel={false} className="bg-transparent p-0" />
-                <span className="hidden sm:inline">{channelCounts[ch] || 0}</span>
+                {ch === 'all' ? 'Всички' : ch.charAt(0).toUpperCase() + ch.slice(1)}
               </button>
             ))}
           </div>
@@ -385,6 +291,60 @@ export default function ConversationsPage() {
         </div>
       </div>
 
+      {/* Stats */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
+              <MessageCircle className="w-5 h-5 text-blue-600" />
+            </div>
+            <div>
+              <p className="text-2xl font-bold text-gray-900">{conversations.length}</p>
+              <p className="text-sm text-gray-500">Разговори</p>
+            </div>
+          </div>
+        </div>
+        <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center">
+              <Clock className="w-5 h-5 text-green-600" />
+            </div>
+            <div>
+              <p className="text-2xl font-bold text-gray-900">
+                {conversations.filter(c => c.status === 'active').length}
+              </p>
+              <p className="text-sm text-gray-500">Активни</p>
+            </div>
+          </div>
+        </div>
+        <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center">
+              <CheckCircle className="w-5 h-5 text-purple-600" />
+            </div>
+            <div>
+              <p className="text-2xl font-bold text-gray-900">
+                {conversations.filter(c => c.status === 'booking_complete').length}
+              </p>
+              <p className="text-sm text-gray-500">Запазени часове</p>
+            </div>
+          </div>
+        </div>
+        <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-gray-100 rounded-lg flex items-center justify-center">
+              <CheckCircle className="w-5 h-5 text-gray-600" />
+            </div>
+            <div>
+              <p className="text-2xl font-bold text-gray-900">
+                {conversations.filter(c => c.status === 'resolved').length}
+              </p>
+              <p className="text-sm text-gray-500">Приключени</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
       {/* Conversations List */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-100 divide-y">
         {filteredConversations.length === 0 ? (
@@ -394,7 +354,7 @@ export default function ConversationsPage() {
             {conversations.length === 0 && (
               <button
                 onClick={syncWhatsApp}
-                className="mt-4 text-green-600 hover:text-green-700 text-sm font-medium"
+                className="mt-4 text-blue-600 hover:text-blue-700 text-sm font-medium"
               >
                 Синхронизирай с Evolution API
               </button>
@@ -449,10 +409,11 @@ export default function ConversationsPage() {
                   </div>
                 </div>
                 <div className="text-right">
-                  <p className="text-sm text-gray-500">{formatTime(conversation.updated_at)}</p>
-                  <div className="flex items-center gap-1 mt-1">
-                    <span className="text-xs text-gray-400">{conversation.messagesCount} съобщения</span>
-                    <ArrowRight className="w-4 h-4 text-gray-400" />
+                  <div className="text-sm text-gray-400">
+                    {formatTime(conversation.updated_at)}
+                  </div>
+                  <div className="text-xs text-gray-400 mt-1">
+                    {conversation.messagesCount} съобщения
                   </div>
                 </div>
               </div>
@@ -463,18 +424,13 @@ export default function ConversationsPage() {
 
       {/* Conversation Detail Modal */}
       {selectedConversation && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl w-full max-w-2xl mx-4 max-h-[90vh] overflow-hidden flex flex-col">
-            {/* Header */}
-            <div className="p-4 border-b flex items-center justify-between">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
+          <div className="bg-white rounded-2xl w-full max-w-2xl max-h-[90vh] flex flex-col">
+            {/* Modal Header */}
+            <div className="flex items-center justify-between p-4 border-b">
               <div className="flex items-center gap-3">
-                <div className="relative">
-                  <div className="w-10 h-10 bg-gray-100 rounded-full flex items-center justify-center">
-                    <User className="w-5 h-5 text-gray-600" />
-                  </div>
-                  <div className="absolute -bottom-1 -right-1">
-                    <ChannelBadge channel={selectedConversation.channel} size="sm" showLabel={false} />
-                  </div>
+                <div className="w-10 h-10 bg-gray-100 rounded-full flex items-center justify-center">
+                  <User className="w-5 h-5 text-gray-600" />
                 </div>
                 <div>
                   <div className="flex items-center gap-2">
@@ -498,7 +454,7 @@ export default function ConversationsPage() {
               </button>
             </div>
 
-            {/* Messages - Full History */}
+            {/* Messages */}
             <div className="flex-1 overflow-y-auto p-4 space-y-4 max-h-[60vh]">
               {selectedConversation.recentMessages
                 .slice()

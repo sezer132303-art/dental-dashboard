@@ -15,9 +15,7 @@ import {
   RefreshCw,
   Plus,
   Loader2,
-  Phone,
-  ArrowRight,
-  Filter
+  Phone
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import ChannelBadge from '@/components/ChannelBadge'
@@ -115,6 +113,7 @@ export default function ClinicConversations() {
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState<string>('all')
+  const [channelFilter, setChannelFilter] = useState<string>('all')
   const [selectedConversation, setSelectedConversation] = useState<Conversation | null>(null)
   const [reminderFilter, setReminderFilter] = useState<'all' | 'sent' | 'pending' | 'failed'>('all')
   const [generating, setGenerating] = useState(false)
@@ -130,13 +129,16 @@ export default function ClinicConversations() {
     } else {
       fetchReminders()
     }
-  }, [activeTab, statusFilter])
+  }, [activeTab, statusFilter, channelFilter])
 
   async function fetchConversations() {
     try {
       const params = new URLSearchParams()
       if (statusFilter !== 'all') {
         params.append('status', statusFilter)
+      }
+      if (channelFilter !== 'all') {
+        params.append('channel', channelFilter)
       }
       const response = await fetch(`/api/conversations?${params}`)
       if (response.ok) {
@@ -231,19 +233,20 @@ export default function ClinicConversations() {
     return phone
   }
 
-  const formatRelativeTime = (dateStr: string) => {
+  const formatTime = (dateStr: string) => {
     const date = new Date(dateStr)
     const now = new Date()
-    const diffMs = now.getTime() - date.getTime()
-    const diffMins = Math.floor(diffMs / 60000)
-    const diffHours = Math.floor(diffMs / 3600000)
-    const diffDays = Math.floor(diffMs / 86400000)
+    const diff = now.getTime() - date.getTime()
+    const hours = Math.floor(diff / (1000 * 60 * 60))
 
-    if (diffMins < 1) return 'сега'
-    if (diffMins < 60) return `${diffMins} мин`
-    if (diffHours < 24) return `${diffHours} ч`
-    if (diffDays < 7) return `${diffDays} дни`
-    return date.toLocaleDateString('bg-BG')
+    if (hours < 1) {
+      const minutes = Math.floor(diff / (1000 * 60))
+      return `преди ${minutes} мин`
+    }
+    if (hours < 24) {
+      return `преди ${hours} ч`
+    }
+    return date.toLocaleDateString('bg-BG', { day: 'numeric', month: 'short' })
   }
 
   const filteredConversations = conversations.filter(conv => {
@@ -265,16 +268,12 @@ export default function ClinicConversations() {
     return reminder.status === reminderFilter
   })
 
-  const activeCount = conversations.filter(c => c.status === 'active').length
-  const bookingCount = conversations.filter(c => c.status === 'booking_complete').length
-  const resolvedCount = conversations.filter(c => c.status === 'resolved').length
-
   const formatDate = (dateStr: string) => {
     if (!dateStr) return ''
     return new Date(dateStr).toLocaleDateString('bg-BG', { day: '2-digit', month: '2-digit', year: 'numeric' })
   }
 
-  const formatTime = (timeStr: string) => {
+  const formatTimeStr = (timeStr: string) => {
     if (!timeStr) return ''
     return timeStr.substring(0, 5)
   }
@@ -310,36 +309,29 @@ export default function ClinicConversations() {
   if (loading && activeTab === 'conversations') {
     return (
       <div className="flex items-center justify-center h-64">
-        <Loader2 className="w-8 h-8 animate-spin text-teal-600" />
+        <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
       </div>
     )
   }
 
   return (
     <div className="space-y-6">
-      {/* Header */}
+      {/* Header with Sync */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Разговори</h1>
-          <p className="text-gray-500">Следене на съобщения от всички канали</p>
+          <h2 className="text-xl font-semibold text-gray-900">Всички WhatsApp разговори</h2>
+          <p className="text-sm text-gray-500 mt-1">
+            Преглед на разговорите от всички канали
+          </p>
         </div>
-        <div className="flex items-center gap-2">
-          <button
-            onClick={syncWhatsApp}
-            disabled={syncing}
-            className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 transition"
-          >
-            <RefreshCw className={`w-4 h-4 ${syncing ? 'animate-spin' : ''}`} />
-            {syncing ? 'Синхронизиране...' : 'Синхронизирай WhatsApp'}
-          </button>
-          <button
-            onClick={() => activeTab === 'conversations' ? fetchConversations() : fetchReminders()}
-            className="flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
-          >
-            <RefreshCw className="w-4 h-4" />
-            Обнови
-          </button>
-        </div>
+        <button
+          onClick={syncWhatsApp}
+          disabled={syncing}
+          className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 transition"
+        >
+          <RefreshCw className={`w-5 h-5 ${syncing ? 'animate-spin' : ''}`} />
+          {syncing ? 'Синхронизиране...' : 'Синхронизирай WhatsApp'}
+        </button>
       </div>
 
       {/* Sync message */}
@@ -362,7 +354,7 @@ export default function ClinicConversations() {
           className={cn(
             'px-6 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-2',
             activeTab === 'conversations'
-              ? 'bg-teal-500 text-white'
+              ? 'bg-blue-600 text-white'
               : 'text-gray-600 hover:bg-gray-100'
           )}
         >
@@ -374,7 +366,7 @@ export default function ClinicConversations() {
           className={cn(
             'px-6 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-2',
             activeTab === 'reminders'
-              ? 'bg-teal-500 text-white'
+              ? 'bg-blue-600 text-white'
               : 'text-gray-600 hover:bg-gray-100'
           )}
         >
@@ -385,54 +377,6 @@ export default function ClinicConversations() {
 
       {activeTab === 'conversations' ? (
         <>
-          {/* Stats */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-100">
-              <div className="flex items-center gap-3">
-                <div className="p-3 rounded-xl bg-blue-100">
-                  <MessageCircle className="w-5 h-5 text-blue-600" />
-                </div>
-                <div>
-                  <p className="text-sm text-gray-500">Общо</p>
-                  <p className="text-2xl font-bold text-gray-900">{conversations.length}</p>
-                </div>
-              </div>
-            </div>
-            <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-100">
-              <div className="flex items-center gap-3">
-                <div className="p-3 rounded-xl bg-green-100">
-                  <Clock className="w-5 h-5 text-green-600" />
-                </div>
-                <div>
-                  <p className="text-sm text-gray-500">Активни</p>
-                  <p className="text-2xl font-bold text-green-600">{activeCount}</p>
-                </div>
-              </div>
-            </div>
-            <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-100">
-              <div className="flex items-center gap-3">
-                <div className="p-3 rounded-xl bg-purple-100">
-                  <Calendar className="w-5 h-5 text-purple-600" />
-                </div>
-                <div>
-                  <p className="text-sm text-gray-500">Запазени часове</p>
-                  <p className="text-2xl font-bold text-purple-600">{bookingCount}</p>
-                </div>
-              </div>
-            </div>
-            <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-100">
-              <div className="flex items-center gap-3">
-                <div className="p-3 rounded-xl bg-gray-100">
-                  <CheckCircle className="w-5 h-5 text-gray-600" />
-                </div>
-                <div>
-                  <p className="text-sm text-gray-500">Приключени</p>
-                  <p className="text-2xl font-bold text-gray-600">{resolvedCount}</p>
-                </div>
-              </div>
-            </div>
-          </div>
-
           {/* Search Bar */}
           <div className="bg-white rounded-xl shadow-sm p-4">
             <div className="relative max-w-md">
@@ -442,30 +386,107 @@ export default function ClinicConversations() {
                 placeholder="Търсене по име или телефон..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                className="w-full pl-10 pr-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 text-gray-900"
+                className="w-full pl-10 pr-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900"
               />
             </div>
           </div>
 
-          {/* Status Filter */}
-          <div className="flex items-center gap-2">
-            <Filter className="w-4 h-4 text-gray-500" />
-            <span className="text-sm text-gray-600">Статус:</span>
-            <div className="flex gap-1">
-              {['all', 'active', 'booking_complete', 'resolved'].map((f) => (
-                <button
-                  key={f}
-                  onClick={() => setStatusFilter(f)}
-                  className={cn(
-                    'px-3 py-1.5 rounded-lg text-sm font-medium transition',
-                    statusFilter === f
-                      ? 'bg-teal-600 text-white'
-                      : 'bg-white text-gray-700 border border-gray-200 hover:bg-gray-50'
-                  )}
-                >
-                  {f === 'all' ? 'Всички' : statusLabels[f]}
-                </button>
-              ))}
+          {/* Filters */}
+          <div className="flex flex-wrap gap-4">
+            {/* Channel Filter */}
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-gray-600">Канал:</span>
+              <div className="flex gap-1">
+                {['all', 'whatsapp', 'messenger', 'instagram', 'viber'].map((ch) => (
+                  <button
+                    key={ch}
+                    onClick={() => setChannelFilter(ch)}
+                    className={cn(
+                      'px-3 py-1.5 rounded-lg text-sm font-medium transition',
+                      channelFilter === ch
+                        ? 'bg-blue-600 text-white'
+                        : 'bg-white text-gray-700 border border-gray-200 hover:bg-gray-50'
+                    )}
+                  >
+                    {ch === 'all' ? 'Всички' : ch.charAt(0).toUpperCase() + ch.slice(1)}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Status Filter */}
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-gray-600">Статус:</span>
+              <div className="flex gap-1">
+                {['all', 'active', 'booking_complete', 'resolved'].map((f) => (
+                  <button
+                    key={f}
+                    onClick={() => setStatusFilter(f)}
+                    className={cn(
+                      'px-3 py-1.5 rounded-lg text-sm font-medium transition',
+                      statusFilter === f
+                        ? 'bg-blue-600 text-white'
+                        : 'bg-white text-gray-700 border border-gray-200 hover:bg-gray-50'
+                    )}
+                  >
+                    {f === 'all' ? 'Всички' : statusLabels[f]}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* Stats */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
+                  <MessageCircle className="w-5 h-5 text-blue-600" />
+                </div>
+                <div>
+                  <p className="text-2xl font-bold text-gray-900">{conversations.length}</p>
+                  <p className="text-sm text-gray-500">Разговори</p>
+                </div>
+              </div>
+            </div>
+            <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center">
+                  <Clock className="w-5 h-5 text-green-600" />
+                </div>
+                <div>
+                  <p className="text-2xl font-bold text-gray-900">
+                    {conversations.filter(c => c.status === 'active').length}
+                  </p>
+                  <p className="text-sm text-gray-500">Активни</p>
+                </div>
+              </div>
+            </div>
+            <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center">
+                  <CheckCircle className="w-5 h-5 text-purple-600" />
+                </div>
+                <div>
+                  <p className="text-2xl font-bold text-gray-900">
+                    {conversations.filter(c => c.status === 'booking_complete').length}
+                  </p>
+                  <p className="text-sm text-gray-500">Запазени часове</p>
+                </div>
+              </div>
+            </div>
+            <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-gray-100 rounded-lg flex items-center justify-center">
+                  <CheckCircle className="w-5 h-5 text-gray-600" />
+                </div>
+                <div>
+                  <p className="text-2xl font-bold text-gray-900">
+                    {conversations.filter(c => c.status === 'resolved').length}
+                  </p>
+                  <p className="text-sm text-gray-500">Приключени</p>
+                </div>
+              </div>
             </div>
           </div>
 
@@ -478,10 +499,8 @@ export default function ClinicConversations() {
                 {conversations.length === 0 && (
                   <button
                     onClick={syncWhatsApp}
-                    disabled={syncing}
-                    className="mt-4 inline-flex items-center gap-2 text-green-600 hover:text-green-700 text-sm font-medium"
+                    className="mt-4 text-blue-600 hover:text-blue-700 text-sm font-medium"
                   >
-                    <RefreshCw className={`w-4 h-4 ${syncing ? 'animate-spin' : ''}`} />
                     Синхронизирай с Evolution API
                   </button>
                 )}
@@ -535,10 +554,11 @@ export default function ClinicConversations() {
                       </div>
                     </div>
                     <div className="text-right">
-                      <p className="text-sm text-gray-500">{formatRelativeTime(conversation.updated_at)}</p>
-                      <div className="flex items-center gap-1 mt-1">
-                        <span className="text-xs text-gray-400">{conversation.messagesCount} съобщения</span>
-                        <ArrowRight className="w-4 h-4 text-gray-400" />
+                      <div className="text-sm text-gray-400">
+                        {formatTime(conversation.updated_at)}
+                      </div>
+                      <div className="text-xs text-gray-400 mt-1">
+                        {conversation.messagesCount} съобщения
                       </div>
                     </div>
                   </div>
@@ -552,47 +572,47 @@ export default function ClinicConversations() {
           {/* Reminders Stats */}
           {reminderStats && (
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <div className="bg-white rounded-xl p-4 shadow-sm">
+              <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100">
                 <div className="flex items-center gap-3">
                   <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
                     <Bell className="w-5 h-5 text-blue-600" />
                   </div>
                   <div>
                     <p className="text-2xl font-bold text-gray-900">{reminderStats.total}</p>
-                    <p className="text-xs text-gray-500">Общо</p>
+                    <p className="text-sm text-gray-500">Общо</p>
                   </div>
                 </div>
               </div>
-              <div className="bg-white rounded-xl p-4 shadow-sm">
+              <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100">
                 <div className="flex items-center gap-3">
                   <div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center">
                     <Send className="w-5 h-5 text-green-600" />
                   </div>
                   <div>
                     <p className="text-2xl font-bold text-green-600">{reminderStats.sent}</p>
-                    <p className="text-xs text-gray-500">Изпратени</p>
+                    <p className="text-sm text-gray-500">Изпратени</p>
                   </div>
                 </div>
               </div>
-              <div className="bg-white rounded-xl p-4 shadow-sm">
+              <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100">
                 <div className="flex items-center gap-3">
                   <div className="w-10 h-10 bg-yellow-100 rounded-lg flex items-center justify-center">
                     <Clock className="w-5 h-5 text-yellow-600" />
                   </div>
                   <div>
                     <p className="text-2xl font-bold text-yellow-600">{reminderStats.pending}</p>
-                    <p className="text-xs text-gray-500">Чакащи</p>
+                    <p className="text-sm text-gray-500">Чакащи</p>
                   </div>
                 </div>
               </div>
-              <div className="bg-white rounded-xl p-4 shadow-sm">
+              <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100">
                 <div className="flex items-center gap-3">
                   <div className="w-10 h-10 bg-red-100 rounded-lg flex items-center justify-center">
                     <AlertCircle className="w-5 h-5 text-red-600" />
                   </div>
                   <div>
                     <p className="text-2xl font-bold text-red-600">{reminderStats.failed}</p>
-                    <p className="text-xs text-gray-500">Неуспешни</p>
+                    <p className="text-sm text-gray-500">Неуспешни</p>
                   </div>
                 </div>
               </div>
@@ -619,7 +639,7 @@ export default function ClinicConversations() {
               <select
                 value={reminderFilter}
                 onChange={(e) => setReminderFilter(e.target.value as typeof reminderFilter)}
-                className="border rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 text-gray-900"
+                className="border rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900"
               >
                 <option value="all">Всички</option>
                 <option value="sent">Изпратени</option>
@@ -631,14 +651,14 @@ export default function ClinicConversations() {
               <button
                 onClick={generateReminders}
                 disabled={generating}
-                className="flex items-center gap-2 px-4 py-2 text-sm bg-teal-600 text-white hover:bg-teal-700 rounded-lg transition-colors disabled:opacity-50"
+                className="flex items-center gap-2 px-4 py-2 text-sm bg-blue-600 text-white hover:bg-blue-700 rounded-lg transition-colors disabled:opacity-50"
               >
                 {generating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
                 {generating ? 'Генериране...' : 'Генерирай напомняния'}
               </button>
               <button
                 onClick={fetchReminders}
-                className="flex items-center gap-2 px-4 py-2 text-sm text-teal-600 hover:bg-teal-50 rounded-lg transition-colors"
+                className="flex items-center gap-2 px-4 py-2 text-sm text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
               >
                 <RefreshCw className="w-4 h-4" />
                 Обнови
@@ -649,7 +669,7 @@ export default function ClinicConversations() {
           {/* Reminders list */}
           {loading ? (
             <div className="flex items-center justify-center h-64">
-              <Loader2 className="w-8 h-8 animate-spin text-teal-600" />
+              <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
             </div>
           ) : filteredReminders.length === 0 ? (
             <div className="bg-white rounded-xl shadow-sm p-12 text-center">
@@ -661,7 +681,7 @@ export default function ClinicConversations() {
               <button
                 onClick={generateReminders}
                 disabled={generating}
-                className="mt-4 inline-flex items-center gap-2 px-4 py-2 text-sm bg-teal-600 text-white hover:bg-teal-700 rounded-lg transition-colors disabled:opacity-50"
+                className="mt-4 inline-flex items-center gap-2 px-4 py-2 text-sm bg-blue-600 text-white hover:bg-blue-700 rounded-lg transition-colors disabled:opacity-50"
               >
                 {generating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
                 Генерирай напомняния за бъдещи часове
@@ -699,7 +719,7 @@ export default function ClinicConversations() {
                           <span>{formatDate(reminder.appointment?.appointment_date)}</span>
                           <span className="text-gray-400">|</span>
                           <Clock className="w-4 h-4 text-gray-400" />
-                          <span>{formatTime(reminder.appointment?.start_time)}</span>
+                          <span>{formatTimeStr(reminder.appointment?.start_time)}</span>
                         </div>
                         <p className="text-xs text-gray-500 mt-1">{reminder.appointment?.doctor?.name}</p>
                       </td>
@@ -746,18 +766,13 @@ export default function ClinicConversations() {
 
       {/* Conversation Detail Modal */}
       {selectedConversation && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl w-full max-w-2xl mx-4 max-h-[90vh] overflow-hidden flex flex-col">
-            {/* Header */}
-            <div className="p-4 border-b flex items-center justify-between">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
+          <div className="bg-white rounded-2xl w-full max-w-2xl max-h-[90vh] flex flex-col">
+            {/* Modal Header */}
+            <div className="flex items-center justify-between p-4 border-b">
               <div className="flex items-center gap-3">
-                <div className="relative">
-                  <div className="w-10 h-10 bg-gray-100 rounded-full flex items-center justify-center">
-                    <User className="w-5 h-5 text-gray-600" />
-                  </div>
-                  <div className="absolute -bottom-1 -right-1">
-                    <ChannelBadge channel={selectedConversation.channel || 'whatsapp'} size="sm" showLabel={false} />
-                  </div>
+                <div className="w-10 h-10 bg-gray-100 rounded-full flex items-center justify-center">
+                  <User className="w-5 h-5 text-gray-600" />
                 </div>
                 <div>
                   <div className="flex items-center gap-2">
@@ -781,7 +796,7 @@ export default function ClinicConversations() {
               </button>
             </div>
 
-            {/* Messages - Full History */}
+            {/* Messages */}
             <div className="flex-1 overflow-y-auto p-4 space-y-4 max-h-[60vh]">
               {selectedConversation.recentMessages
                 .slice()
