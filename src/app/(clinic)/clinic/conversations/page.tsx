@@ -369,13 +369,13 @@ export default function ClinicConversations() {
               onClick={toggleChatbot}
               disabled={togglingChatbot}
               className={cn(
-                'relative w-12 h-6 rounded-full transition-colors duration-300 ease-in-out disabled:opacity-50',
+                'relative inline-flex items-center w-11 h-6 rounded-full transition-colors duration-300 ease-in-out disabled:opacity-50',
                 chatbotEnabled ? 'bg-green-600' : 'bg-red-500'
               )}
             >
               <span className={cn(
-                'absolute top-1 w-4 h-4 bg-white rounded-full transition-transform duration-300 ease-in-out shadow-sm',
-                chatbotEnabled ? 'translate-x-7' : 'translate-x-1'
+                'inline-block w-4 h-4 bg-white rounded-full transition-transform duration-300 ease-in-out shadow-sm',
+                chatbotEnabled ? 'translate-x-6' : 'translate-x-1'
               )} />
             </button>
             <span className={cn(

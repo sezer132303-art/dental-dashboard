@@ -440,12 +440,12 @@ export default function AdminClinicsPage() {
                 <button
                   onClick={() => toggleChatbot(clinic.id, clinic.chatbot_enabled !== false)}
                   disabled={togglingChatbotId === clinic.id}
-                  className={`relative w-12 h-6 rounded-full transition-colors duration-300 ease-in-out disabled:opacity-50 ${
+                  className={`relative inline-flex items-center w-11 h-6 rounded-full transition-colors duration-300 ease-in-out disabled:opacity-50 ${
                     clinic.chatbot_enabled !== false ? 'bg-green-600' : 'bg-red-500'
                   }`}
                 >
-                  <span className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-transform duration-300 ease-in-out shadow-sm ${
-                    clinic.chatbot_enabled !== false ? 'translate-x-7' : 'translate-x-1'
+                  <span className={`inline-block w-4 h-4 bg-white rounded-full transition-transform duration-300 ease-in-out shadow-sm ${
+                    clinic.chatbot_enabled !== false ? 'translate-x-6' : 'translate-x-1'
                   }`} />
                 </button>
                 <span className={`text-xs font-medium transition-colors duration-300 ${
