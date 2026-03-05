@@ -84,6 +84,20 @@ export async function POST(request: NextRequest) {
       effectiveClinicId = getDefaultClinicId()
     }
 
+    // Check if chatbot is enabled for this clinic
+    let chatbotActive = true
+    if (effectiveClinicId) {
+      const { data: clinicSettings } = await supabase
+        .from('clinics')
+        .select('chatbot_enabled')
+        .eq('id', effectiveClinicId)
+        .single()
+
+      if (clinicSettings && clinicSettings.chatbot_enabled === false) {
+        chatbotActive = false
+      }
+    }
+
     // Normalize channel user ID based on channel type
     let normalizedUserId = userIdentifier
     let normalizedPhone: string | null = null
@@ -190,7 +204,8 @@ export async function POST(request: NextRequest) {
         channel,
         conversationId: conversation.id,
         messageId: message.id,
-        timestamp: message.sent_at
+        timestamp: message.sent_at,
+        chatbot_active: chatbotActive
       })
     }
 
@@ -226,7 +241,8 @@ export async function POST(request: NextRequest) {
       channel,
       conversationId,
       messageId: message.id,
-      timestamp: message.sent_at
+      timestamp: message.sent_at,
+      chatbot_active: chatbotActive
     })
 
   } catch (error) {

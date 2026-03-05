@@ -120,8 +120,11 @@ export default function ClinicConversations() {
   const [generateMessage, setGenerateMessage] = useState<{ text: string; success: boolean } | null>(null)
   const [syncing, setSyncing] = useState(false)
   const [syncMessage, setSyncMessage] = useState<{ text: string; success: boolean } | null>(null)
+  const [chatbotEnabled, setChatbotEnabled] = useState<boolean>(true)
+  const [togglingChatbot, setTogglingChatbot] = useState(false)
 
   useEffect(() => {
+    fetchChatbotStatus()
     if (activeTab === 'conversations') {
       fetchConversations()
       const interval = setInterval(fetchConversations, 30000)
@@ -130,6 +133,37 @@ export default function ClinicConversations() {
       fetchReminders()
     }
   }, [activeTab, statusFilter, channelFilter])
+
+  async function fetchChatbotStatus() {
+    try {
+      const response = await fetch('/api/clinic/profile')
+      if (response.ok) {
+        const data = await response.json()
+        setChatbotEnabled(data.chatbot_enabled !== false)
+      }
+    } catch (error) {
+      console.error('Error fetching chatbot status:', error)
+    }
+  }
+
+  async function toggleChatbot() {
+    setTogglingChatbot(true)
+    try {
+      const newValue = !chatbotEnabled
+      const response = await fetch('/api/clinic/profile', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ chatbot_enabled: newValue })
+      })
+      if (response.ok) {
+        setChatbotEnabled(newValue)
+      }
+    } catch (error) {
+      console.error('Error toggling chatbot:', error)
+    } finally {
+      setTogglingChatbot(false)
+    }
+  }
 
   async function fetchConversations() {
     try {
@@ -316,7 +350,7 @@ export default function ClinicConversations() {
 
   return (
     <div className="space-y-6">
-      {/* Header with Sync */}
+      {/* Header with Sync and Chatbot Toggle */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <h2 className="text-xl font-semibold text-gray-900">Всички WhatsApp разговори</h2>
@@ -324,14 +358,40 @@ export default function ClinicConversations() {
             Преглед на разговорите от всички канали
           </p>
         </div>
-        <button
-          onClick={syncWhatsApp}
-          disabled={syncing}
-          className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 transition"
-        >
-          <RefreshCw className={`w-5 h-5 ${syncing ? 'animate-spin' : ''}`} />
-          {syncing ? 'Синхронизиране...' : 'Синхронизирай WhatsApp'}
-        </button>
+        <div className="flex items-center gap-3">
+          {/* Chatbot Toggle */}
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-gray-600">Chatbot:</span>
+            <button
+              onClick={toggleChatbot}
+              disabled={togglingChatbot}
+              className={cn(
+                'relative w-12 h-6 rounded-full transition-colors disabled:opacity-50',
+                chatbotEnabled ? 'bg-green-600' : 'bg-gray-300'
+              )}
+            >
+              <span className={cn(
+                'absolute top-1 w-4 h-4 bg-white rounded-full transition-transform',
+                chatbotEnabled ? 'translate-x-7' : 'translate-x-1'
+              )} />
+            </button>
+            <span className={cn(
+              'text-xs font-medium',
+              chatbotEnabled ? 'text-green-600' : 'text-gray-400'
+            )}>
+              {chatbotEnabled ? 'ON' : 'OFF'}
+            </span>
+          </div>
+          {/* Sync Button */}
+          <button
+            onClick={syncWhatsApp}
+            disabled={syncing}
+            className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 transition"
+          >
+            <RefreshCw className={`w-5 h-5 ${syncing ? 'animate-spin' : ''}`} />
+            {syncing ? 'Синхронизиране...' : 'Синхронизирай WhatsApp'}
+          </button>
+        </div>
       </div>
 
       {/* Sync message */}

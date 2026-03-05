@@ -33,6 +33,7 @@ export async function GET() {
       id: clinic.id,
       name: clinic.name,
       whatsapp_instance: clinic.whatsapp_instance,
+      chatbot_enabled: clinic.chatbot_enabled !== false,
       google_calendar_id: clinic.google_calendar_id,
       created_at: clinic.created_at,
       doctors: clinic.doctors?.[0]?.count || 0,

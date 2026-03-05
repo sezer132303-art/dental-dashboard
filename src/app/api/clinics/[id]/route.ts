@@ -71,6 +71,7 @@ export async function PATCH(
     if (body.google_calendar_id !== undefined) updateData.google_calendar_id = body.google_calendar_id
     if (body.google_calendars !== undefined) updateData.google_calendars = body.google_calendars
     if (body.google_service_account !== undefined) updateData.google_service_account = body.google_service_account
+    if (body.chatbot_enabled !== undefined) updateData.chatbot_enabled = body.chatbot_enabled
 
     const supabase = createServerSupabaseClient()
 

@@ -7,6 +7,7 @@ interface Clinic {
   id: string
   name: string
   whatsapp_instance: string | null
+  chatbot_enabled: boolean
   doctors: number
   patients: number
   appointments: number
@@ -49,6 +50,7 @@ export default function AdminClinicsPage() {
   const [error, setError] = useState('')
   const [syncingClinicId, setSyncingClinicId] = useState<string | null>(null)
   const [syncResult, setSyncResult] = useState<{ clinicId: string; message: string; success: boolean } | null>(null)
+  const [togglingChatbotId, setTogglingChatbotId] = useState<string | null>(null)
 
   useEffect(() => {
     fetchClinics()
@@ -306,6 +308,26 @@ export default function AdminClinicsPage() {
     }
   }
 
+  async function toggleChatbot(clinicId: string, currentValue: boolean) {
+    setTogglingChatbotId(clinicId)
+    try {
+      const response = await fetch(`/api/clinics/${clinicId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ chatbot_enabled: !currentValue })
+      })
+      if (response.ok) {
+        setClinics(prev => prev.map(c =>
+          c.id === clinicId ? { ...c, chatbot_enabled: !currentValue } : c
+        ))
+      }
+    } catch (error) {
+      console.error('Toggle chatbot error:', error)
+    } finally {
+      setTogglingChatbotId(null)
+    }
+  }
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -389,6 +411,29 @@ export default function AdminClinicsPage() {
               <div>
                 <p className="text-2xl font-bold text-gray-900">{clinic.appointments}</p>
                 <p className="text-xs text-gray-500">Часове</p>
+              </div>
+            </div>
+
+            {/* Chatbot Toggle */}
+            <div className="mt-4 pt-4 border-t border-gray-100 flex items-center justify-between">
+              <span className="text-sm text-gray-600">Chatbot</span>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => toggleChatbot(clinic.id, clinic.chatbot_enabled !== false)}
+                  disabled={togglingChatbotId === clinic.id}
+                  className={`relative w-12 h-6 rounded-full transition-colors disabled:opacity-50 ${
+                    clinic.chatbot_enabled !== false ? 'bg-green-600' : 'bg-gray-300'
+                  }`}
+                >
+                  <span className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-transform ${
+                    clinic.chatbot_enabled !== false ? 'translate-x-7' : 'translate-x-1'
+                  }`} />
+                </button>
+                <span className={`text-xs font-medium ${
+                  clinic.chatbot_enabled !== false ? 'text-green-600' : 'text-gray-400'
+                }`}>
+                  {clinic.chatbot_enabled !== false ? 'ON' : 'OFF'}
+                </span>
               </div>
             </div>
           </div>
