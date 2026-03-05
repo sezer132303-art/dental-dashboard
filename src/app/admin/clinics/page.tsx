@@ -317,16 +317,31 @@ export default function AdminClinicsPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ clinicId, enabled: newValue })
       })
+      const data = await response.json()
       if (response.ok) {
         setClinics(prev => prev.map(c =>
           c.id === clinicId ? { ...c, chatbot_enabled: newValue } : c
         ))
+        setSyncResult({
+          clinicId,
+          message: newValue ? 'Chatbot активиран' : 'Chatbot деактивиран',
+          success: true
+        })
       } else {
-        const data = await response.json()
         console.error('Toggle chatbot error:', data.error)
+        setSyncResult({
+          clinicId,
+          message: data.error || 'Грешка при превключване на chatbot',
+          success: false
+        })
       }
     } catch (error) {
       console.error('Toggle chatbot error:', error)
+      setSyncResult({
+        clinicId,
+        message: 'Грешка при свързване със сървъра',
+        success: false
+      })
     } finally {
       setTogglingChatbotId(null)
     }
