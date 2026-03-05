@@ -150,13 +150,16 @@ export default function ClinicConversations() {
     setTogglingChatbot(true)
     try {
       const newValue = !chatbotEnabled
-      const response = await fetch('/api/clinic/profile', {
-        method: 'PATCH',
+      const response = await fetch('/api/clinic/toggle-chatbot', {
+        method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ chatbot_enabled: newValue })
+        body: JSON.stringify({ enabled: newValue })
       })
       if (response.ok) {
         setChatbotEnabled(newValue)
+      } else {
+        const data = await response.json()
+        console.error('Toggle chatbot error:', data.error)
       }
     } catch (error) {
       console.error('Error toggling chatbot:', error)

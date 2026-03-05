@@ -311,15 +311,19 @@ export default function AdminClinicsPage() {
   async function toggleChatbot(clinicId: string, currentValue: boolean) {
     setTogglingChatbotId(clinicId)
     try {
-      const response = await fetch(`/api/clinics/${clinicId}`, {
-        method: 'PATCH',
+      const newValue = !currentValue
+      const response = await fetch('/api/admin/toggle-chatbot', {
+        method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ chatbot_enabled: !currentValue })
+        body: JSON.stringify({ clinicId, enabled: newValue })
       })
       if (response.ok) {
         setClinics(prev => prev.map(c =>
-          c.id === clinicId ? { ...c, chatbot_enabled: !currentValue } : c
+          c.id === clinicId ? { ...c, chatbot_enabled: newValue } : c
         ))
+      } else {
+        const data = await response.json()
+        console.error('Toggle chatbot error:', data.error)
       }
     } catch (error) {
       console.error('Toggle chatbot error:', error)
